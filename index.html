@@ -151,7 +151,7 @@ B,Spain,2036</pre>
                         <input type="number" id="dixonColesRho" value="-0.10" min="-0.5" max="0" step="0.01" disabled
                                class="w-24 p-1.5 border border-indigo-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:bg-gray-100">
                     </div>
-                    <p class="text-xs text-indigo-600 w-full mt-0.5">Adjusts joint probabilities for low-scoring results (0-0, 1-0, 0-1, 1-1). Negative rho increases 0-0 and 1-1 frequency. Typical value: &#8722;0.10.</p>
+                    <p class="text-xs text-indigo-600 w-full mt-0.5">Per-match ρ is now auto-derived from draw odds during parsing. This checkbox applies an <strong>additional</strong> global ρ offset. Negative rho increases 0-0 and 1-1 frequency. Typical override: −0.05 to −0.10.</p>
                 </div>
             </div>
 

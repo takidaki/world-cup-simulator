@@ -243,6 +243,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                                     <th>Lambda 2</th>
                                     <th>Total</th>
                                     <th>Supremacy</th>
+                                    <th>ρ</th>
                                 </tr>
                             </thead>
                             <tbody>${parsedMatches
@@ -260,6 +261,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                                         <td>${match.lambda2.toFixed(3)}</td>
                                         <td>${(match.lambda1 + match.lambda2).toFixed(3)}</td>
                                         <td>${(match.lambda1 - match.lambda2).toFixed(3)}</td>
+                                        <td>${(match.matchRho != null ? match.matchRho.toFixed(3) : '—')}</td>
                                     </tr>
                                 `)
                                 .join('')}</tbody>
@@ -478,15 +480,68 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             return [n - 1, n - 1];
         }
 
-        function calculateModelProbsFromXG(homeXG, awayXG, goalLine = 2.5) {
+        // --- Shin's Method for accurate vig removal (Favorite-Longshot Bias correction) ---
+        function shinTrueProbs(impliedProbs) {
+            // impliedProbs: array of raw implied probabilities (1/odds), summing > 1
+            // Returns array of true probabilities summing to 1
+            const n = impliedProbs.length;
+            const totalImplied = impliedProbs.reduce((s, p) => s + p, 0);
+            if (totalImplied <= 1.0001) {
+                // No meaningful overround — normalise proportionally
+                return impliedProbs.map(p => p / totalImplied);
+            }
+
+            // Bisect to find Shin's z parameter
+            // For each outcome i: trueProb_i = (sqrt(z^2 + 4*(1-z)*imp_i^2 / totalImplied) - z) / (2*(1-z))
+            // Sum of trueProbs must equal 1.
+            let zLo = 0, zHi = 1;
+            const maxIter = 200;
+            const tol = 1e-12;
+            let z = 0;
+
+            for (let iter = 0; iter < maxIter; iter++) {
+                z = (zLo + zHi) / 2;
+                let sumTrue = 0;
+                const oneMinusZ = 1 - z;
+                if (oneMinusZ < 1e-15) { zHi = z; continue; }
+                for (let i = 0; i < n; i++) {
+                    const disc = z * z + 4 * oneMinusZ * (impliedProbs[i] * impliedProbs[i]) / totalImplied;
+                    sumTrue += (Math.sqrt(disc) - z) / (2 * oneMinusZ);
+                }
+                if (Math.abs(sumTrue - 1) < tol) break;
+                if (sumTrue > 1) zLo = z;
+                else zHi = z;
+            }
+
+            const oneMinusZ = 1 - z;
+            if (oneMinusZ < 1e-15) {
+                // Degenerate: fall back to proportional
+                return impliedProbs.map(p => p / totalImplied);
+            }
+            return impliedProbs.map(imp => {
+                const disc = z * z + 4 * oneMinusZ * (imp * imp) / totalImplied;
+                return (Math.sqrt(disc) - z) / (2 * oneMinusZ);
+            });
+        }
+
+        // --- DC-aware model probability calculation with dynamic goal truncation ---
+        function calculateModelProbsFromXG(homeXG, awayXG, goalLine = 2.5, rho = 0) {
             let probHomeWin = 0, probAwayWin = 0, probDraw = 0;
             let probUnder = 0, probOver = 0;
-            const maxGoals = 20; 
 
-            for (let i = 0; i <= maxGoals; i++) { 
-                for (let j = 0; j <= maxGoals; j++) { 
-                    const probScore = poissonPMF(homeXG, i) * poissonPMF(awayXG, j);
-                    if (probScore === 0 && !(homeXG === 0 && i === 0 && awayXG === 0 && j === 0) ) continue; 
+            // Dynamic truncation: cap at lambda + 6*sqrt(lambda), minimum 8
+            const maxGoalsHome = Math.max(8, Math.ceil(homeXG + 6 * Math.sqrt(Math.max(homeXG, 0.5))));
+            const maxGoalsAway = Math.max(8, Math.ceil(awayXG + 6 * Math.sqrt(Math.max(awayXG, 0.5))));
+
+            for (let i = 0; i <= maxGoalsHome; i++) {
+                const pmfI = poissonPMF(homeXG, i);
+                if (pmfI < 1e-15 && i > 2) break; // early exit for negligible tail
+                for (let j = 0; j <= maxGoalsAway; j++) { 
+                    const pmfJ = poissonPMF(awayXG, j);
+                    if (pmfJ < 1e-15 && j > 2) break;
+                    const tau = dixonColesToCorrection(i, j, homeXG, awayXG, rho);
+                    const probScore = Math.max(0, pmfI * pmfJ * tau);
+                    if (probScore === 0) continue;
 
                     if (i > j) probHomeWin += probScore;
                     else if (j > i) probAwayWin += probScore;
@@ -496,6 +551,16 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                     if (totalMatchGoals < goalLine) probUnder += probScore;
                     else if (totalMatchGoals > goalLine) probOver += probScore;
                 }
+            }
+
+            // Renormalise to account for DC correction shifting total mass
+            const totalMass = probHomeWin + probDraw + probAwayWin;
+            if (totalMass > 0 && Math.abs(totalMass - 1) > 1e-9) {
+                probHomeWin /= totalMass;
+                probDraw /= totalMass;
+                probAwayWin /= totalMass;
+                probUnder /= totalMass;
+                probOver /= totalMass;
             }
             
             const modelProbHomeWinNoDraw = (probHomeWin + probAwayWin > 0) ? probHomeWin / (probHomeWin + probAwayWin) : 0.5; 
@@ -509,47 +574,94 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             };
         }
 
-        function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, awayPrice) {
-            const normalisedUnder = (1 / underPrice) / ((1 / overPrice) + (1 / underPrice));
-            const normalisedHomeNoDraw = (1 / homePrice) / ((1 / awayPrice) + (1 / homePrice));
+        // --- Coordinate Descent solver: fits (totalGoals, supremacy, rho) simultaneously ---
+        function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, drawPrice, awayPrice) {
+            // --- Step 1: Shin's method for accurate true-probability extraction ---
+            const impliedOU = [1 / overPrice, 1 / underPrice];
+            const shinOU = shinTrueProbs(impliedOU);
+            const targetUnder = shinOU[1]; // P(under 2.5)
+
+            const implied1X2 = [1 / homePrice, 1 / drawPrice, 1 / awayPrice];
+            const shin1X2 = shinTrueProbs(implied1X2);
+            const targetP1 = shin1X2[0]; // P(home win)
+            const targetPX = shin1X2[1]; // P(draw)
+            const targetP2 = shin1X2[2]; // P(away win)
+            const targetHomeNoDraw = (targetP1 + targetP2 > 0) ? targetP1 / (targetP1 + targetP2) : 0.5;
+
             const tol = 1e-7;
-            const maxIter = 100;
+            const maxBisect = 80;
+            const coordDescentPasses = 8; // number of alternating passes
 
-            // Stage 1: bisect on totalGoals (with supremacy=0) to match P(under 2.5).
-            // P(under 2.5) is monotone DECREASING in totalGoals, so this always converges.
-            let lo1 = 0.05, hi1 = 22.0;
             let totalGoals = 2.5;
-            for (let iter = 0; iter < maxIter; iter++) {
-                totalGoals = (lo1 + hi1) / 2;
-                const xg = totalGoals / 2;
-                const p = calculateModelProbsFromXG(xg, xg, 2.5);
-                if (Math.abs(p.modelProbUnderNoExact - normalisedUnder) < tol) break;
-                // P(under) too high → need more goals to push probability down
-                if (p.modelProbUnderNoExact > normalisedUnder) lo1 = totalGoals;
-                else hi1 = totalGoals;
-            }
-
-            // Stage 2: bisect on supremacy to match P(home wins no draw).
-            // P(home wins no draw) is monotone INCREASING in supremacy, so this always converges.
-            const maxSupremacy = totalGoals - 0.02;
-            let lo2 = -maxSupremacy, hi2 = maxSupremacy;
             let supremacy = 0;
-            let homeExpectedGoals = totalGoals / 2, awayExpectedGoals = totalGoals / 2;
-            let finalError = 0;
-            for (let iter = 0; iter < maxIter; iter++) {
-                supremacy = (lo2 + hi2) / 2;
-                homeExpectedGoals = Math.max(0.01, totalGoals / 2 + supremacy / 2);
-                awayExpectedGoals = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-                const p = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5);
-                const err = p.modelProbHomeWinNoDraw - normalisedHomeNoDraw;
-                finalError = Math.abs(err);
-                if (finalError < tol) break;
-                if (err > 0) hi2 = supremacy;
-                else lo2 = supremacy;
+            let rho = 0;
+
+            // --- Step 2: Coordinate Descent over (totalGoals, supremacy, rho) ---
+            for (let pass = 0; pass < coordDescentPasses; pass++) {
+                // --- Pass A: Bisect totalGoals to match P(under 2.5) ---
+                let lo1 = 0.05, hi1 = 22.0;
+                for (let iter = 0; iter < maxBisect; iter++) {
+                    totalGoals = (lo1 + hi1) / 2;
+                    const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+                    const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    if (Math.abs(p.modelProbUnderNoExact - targetUnder) < tol) break;
+                    if (p.modelProbUnderNoExact > targetUnder) lo1 = totalGoals;
+                    else hi1 = totalGoals;
+                }
+
+                // --- Pass B: Bisect supremacy to match P(home wins | no draw) ---
+                const maxSup = Math.max(totalGoals - 0.02, 0.1);
+                let lo2 = -maxSup, hi2 = maxSup;
+                for (let iter = 0; iter < maxBisect; iter++) {
+                    supremacy = (lo2 + hi2) / 2;
+                    const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+                    const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    const err = p.modelProbHomeWinNoDraw - targetHomeNoDraw;
+                    if (Math.abs(err) < tol) break;
+                    if (err > 0) hi2 = supremacy;
+                    else lo2 = supremacy;
+                }
+
+                // --- Pass C: Bisect rho to match P(draw) ---
+                let loR = -0.45, hiR = 0.15;
+                for (let iter = 0; iter < maxBisect; iter++) {
+                    rho = (loR + hiR) / 2;
+                    const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+                    const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    const err = p.probDrawFull - targetPX;
+                    if (Math.abs(err) < tol) break;
+                    // Negative rho increases draw probability (boosts 0-0 and 1-1)
+                    if (err < 0) hiR = rho; // model draw too low → need more negative rho
+                    else loR = rho;          // model draw too high → need less negative rho
+                }
             }
 
-            const converged = finalError < 0.001;
-            return { homeXG: homeExpectedGoals, awayXG: awayExpectedGoals, converged };
+            const homeExpectedGoals = Math.max(0.01, totalGoals / 2 + supremacy / 2);
+            const awayExpectedGoals = Math.max(0.01, totalGoals / 2 - supremacy / 2);
+
+            // Clamp rho to safe DC bounds (tau must stay > 0 for all score cells)
+            const maxSafeRho = 1 / (homeExpectedGoals * awayExpectedGoals + 1e-9);
+            rho = Math.max(-0.4, Math.min(rho, maxSafeRho - 0.01));
+
+            // Validate convergence
+            const finalP = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5, rho);
+            const errUnder = Math.abs(finalP.modelProbUnderNoExact - targetUnder);
+            const errHome = Math.abs(finalP.modelProbHomeWinNoDraw - targetHomeNoDraw);
+            const errDraw = Math.abs(finalP.probDrawFull - targetPX);
+            // Relax draw tolerance for extreme mismatches where draw probability is inherently low
+            const drawTol = targetPX < 0.15 ? 0.025 : 0.012;
+            const converged = errUnder < 0.002 && errHome < 0.002 && errDraw < drawTol;
+
+            return {
+                homeXG: homeExpectedGoals,
+                awayXG: awayExpectedGoals,
+                matchRho: rho,
+                converged,
+                shinProbs: { p1: targetP1, px: targetPX, p2: targetP2 }
+            };
         }
 
         function parseDelimitedLine(line, delimiter) {
@@ -798,7 +910,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const lambda1 = Math.max(0.05, totalGoals * (strength1 / (strength1 + strength2)));
             const lambda2 = Math.max(0.05, totalGoals * (strength2 / (strength1 + strength2)));
 
-            return { lineNum, group, team1: team1Name, team2: team2Name, p1, px: pDraw, p2, lambda1, lambda2 };
+            return { lineNum, group, team1: team1Name, team2: team2Name, p1, px: pDraw, p2, lambda1, lambda2, matchRho: 0 };
         }
 
         function buildMatchPairKey(team1, team2) {
@@ -854,19 +966,22 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 if (odds.some(o => o <= 1)) { errors.push(`L${index+1}: Odds must be >1.0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
 
                 const [o1, ox, o2, oUnder25, oOver25] = odds;
-                const sumInv1X2 = (1/o1)+(1/ox)+(1/o2); if (sumInv1X2 === 0) { errors.push(`L${index+1}: Sum inv 1X2 odds 0. L:"${line}"`); return; }
-                const p1_market=(1/o1)/sumInv1X2, px_market=(1/ox)/sumInv1X2, p2_market=(1/o2)/sumInv1X2;
 
-                const xGResult = calculateExpectedGoalsFromOdds(oOver25, oUnder25, o1, o2);
+                const xGResult = calculateExpectedGoalsFromOdds(oOver25, oUnder25, o1, ox, o2);
                 let lambda1 = xGResult.homeXG;
                 let lambda2 = xGResult.awayXG;
+                let matchRho = xGResult.matchRho || 0;
+                // Use Shin-corrected true probabilities instead of naive proportional normalization
+                let p1_market = xGResult.shinProbs ? xGResult.shinProbs.p1 : 0;
+                let px_market = xGResult.shinProbs ? xGResult.shinProbs.px : 0;
+                let p2_market = xGResult.shinProbs ? xGResult.shinProbs.p2 : 0;
 
                 if (!xGResult.converged) {
                    warnings.push(`L${index+1}: xG solver did not converge for ${team1Name} v ${team2Name} (residual error too large). Results may be less accurate.`);
                 }
                 if (isNaN(lambda1) || isNaN(lambda2) || lambda1 <=0 || lambda2 <=0) {
                    warnings.push(`L${index+1}: xG calc produced invalid values for ${team1Name} v ${team2Name}. Using fallback. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
-                   const p_under_fb = (1/oUnder25) / ((1/oOver25) + (1/oUnder25));
+                   // Fallback using Shin probabilities
                    const lt_fb_simple_approx = 2.5;
                    const s1_fb = p1_market + 0.5 * px_market;
                    const s2_fb = p2_market + 0.5 * px_market;
@@ -877,12 +992,13 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                        lambda1 = lt_fb_simple_approx / 2; lambda2 = lt_fb_simple_approx / 2;
                    }
                    lambda1 = Math.max(0.05, lambda1); lambda2 = Math.max(0.05, lambda2);
+                   matchRho = 0; // reset rho on fallback
                 }
 
                 team1Name = canonicalizeTeamName(team1Name);
                 team2Name = canonicalizeTeamName(team2Name);
 
-                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2 };
+                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2, matchRho };
                 parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
                 if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
                 groupedMatches[group].push(match); groupTeamNames[group].add(team1Name); groupTeamNames[group].add(team2Name);
@@ -1263,20 +1379,25 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const aggStats={};
 
             // Dixon-Coles correction setup
+            // The global checkbox adds an ADDITIONAL rho on top of per-match rho from the solver.
             const dcEnabledEl = document.getElementById('dixonColesEnabled');
             const dcRhoEl = document.getElementById('dixonColesRho');
-            currentDCRho = (dcEnabledEl && dcEnabledEl.checked) ? (parseFloat(dcRhoEl.value) || 0) : 0;
+            const globalDCRhoOverride = (dcEnabledEl && dcEnabledEl.checked) ? (parseFloat(dcRhoEl.value) || 0) : 0;
+            currentDCRho = globalDCRhoOverride; // keep for knockout matches
 
-            // Precompute CDF table per unique (lambda1, lambda2) pair
+            // Precompute CDF table per unique (lambda1, lambda2, effectiveRho) triplet
             const dcCDFCache = new Map();
-            if (currentDCRho !== 0) {
-                for (const gK in groupedMatches) {
-                    for (const m of groupedMatches[gK]) {
-                        const key = `${m.lambda1}:${m.lambda2}`;
-                        if (!dcCDFCache.has(key)) {
-                            dcCDFCache.set(key, buildDixonColesCDF(m.lambda1, m.lambda2, currentDCRho));
-                        }
+            for (const gK in groupedMatches) {
+                for (const m of groupedMatches[gK]) {
+                    // Per-match rho from solver + any global override
+                    const effectiveRho = Math.max(-0.4, Math.min((m.matchRho || 0) + globalDCRhoOverride, 0.15));
+                    const key = `${m.lambda1}:${m.lambda2}:${effectiveRho}`;
+                    if (!dcCDFCache.has(key)) {
+                        dcCDFCache.set(key, buildDixonColesCDF(m.lambda1, m.lambda2, effectiveRho));
                     }
+                    // Store effective rho on match for quick lookup during simulation
+                    m._effectiveRho = effectiveRho;
+                    m._dcCacheKey = key;
                 }
             }
 
@@ -1330,12 +1451,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                         if (lockOutcome) {
                             const locked = simulateLockedMatch(m, lockOutcome);
                             g1 = locked.g1; g2 = locked.g2;
-                        } else if (currentDCRho !== 0) {
-                            const dcKey = `${m.lambda1}:${m.lambda2}`;
-                            [g1, g2] = sampleDixonColes(dcCDFCache.get(dcKey));
                         } else {
-                            g1 = poissonRandom(m.lambda1);
-                            g2 = poissonRandom(m.lambda2);
+                            // Always use DC CDF sampling (per-match rho baked in during precomputation)
+                            [g1, g2] = sampleDixonColes(dcCDFCache.get(m._dcCacheKey));
                         }
                         simulatedGroupMatches.push({ team1: m.team1, team2: m.team2, g1, g2 });
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;sTS[m.team1].groupGames+=1;if(g1===0)sTS[m.team1].scoredEveryGame=false;if(g2===0)sTS[m.team1].concededEveryGame=false;} 
