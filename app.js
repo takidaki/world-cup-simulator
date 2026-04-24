@@ -1,5 +1,5 @@
 import { runKnockoutStage } from './modules/knockoutStage.js';
-import { initializeKnockoutStats, incrementRoundReach } from './modules/knockoutStats.js';
+import { initializeKnockoutStats, incrementRoundReach, recordMatchupInPath } from './modules/knockoutStats.js';
 import { initializeTabSwitching } from './modules/uiTabs.js';
 
                 // --- Tab Switching Logic ---
@@ -1806,7 +1806,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                             thirdRankedList: sortedThirds.slice(0, bestThirdSlots),
                             simTournamentTotals,
                             simulateKnockoutMatch,
-                            incrementRoundReach
+                            incrementRoundReach,
+                            recordMatchupInPath
                         });
                     }
                 }
@@ -2524,7 +2525,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         });
 
         showTournamentTeamOddsButtonEl.addEventListener('click', () => {
-            const team = tournamentTeamSelectEl.value;
+            const selectedTeam = tournamentTeamSelectEl.value;
             const marginPercent = parseFloat(tournamentBookieMarginEl.value);
             tournamentTeamOddsStatusEl.textContent = '';
             tournamentTeamOddsResultContentEl.innerHTML = '';
@@ -2533,11 +2534,10 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             if (currentNumSims === 0) { tournamentTeamOddsStatusEl.textContent = 'Run simulation first.'; return; }
 
             const marginDecimal = marginPercent / 100;
-
             const teamProgress = simulationAggStats?._knockout?.teamProgress || {};
             const allTeamsWithKnockoutData = Object.keys(teamProgress).sort((a, b) => a.localeCompare(b));
             if (allTeamsWithKnockoutData.length === 0) {
-                tournamentTeamOddsStatusEl.textContent = 'No knockout/tournament stats available.';
+                tournamentTeamOddsStatusEl.textContent = 'No knockout/tournament stats available. Make sure bracket data is provided.';
                 return;
             }
 
@@ -2547,8 +2547,9 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 const winnerOdd = calculateOddWithMargin(winProbability, marginDecimal);
                 const impliedProbability = winnerOdd === "N/A" ? 0 : 1 / Number(winnerOdd);
                 return { teamName, winProbability, winnerOdd, impliedProbability };
-            });
-            const totalWinnerImpliedProbability = winnerSelections.reduce((sum, selection) => sum + selection.impliedProbability, 0);
+            }).sort((a, b) => b.winProbability - a.winProbability);
+
+            const totalWinnerImpliedProbability = winnerSelections.reduce((sum, s) => sum + s.impliedProbability, 0);
             const totalWinnerMarginPercent = (totalWinnerImpliedProbability - 1) * 100;
 
             let winnerSortCol = 'winProbability';
@@ -2563,9 +2564,10 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 });
                 const tbody = document.getElementById('winner-odds-tbody');
                 if (!tbody) return;
-                tbody.innerHTML = sorted.map(({ teamName, winProbability, winnerOdd }) =>
-                    `<tr><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`
-                ).join('');
+                tbody.innerHTML = sorted.map(({ teamName, winProbability, winnerOdd }) => {
+                    const highlight = teamName === selectedTeam ? ' style="background:#f0fdf4;font-weight:600"' : '';
+                    return `<tr${highlight}><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`;
+                }).join('');
                 document.querySelectorAll('#winner-odds-table th[data-col]').forEach(th => {
                     const ind = th.querySelector('.sort-ind');
                     if (ind) ind.textContent = th.dataset.col === winnerSortCol ? (winnerSortDir === 1 ? ' ↑' : ' ↓') : '';
@@ -2583,57 +2585,124 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 });
             };
 
-            let html = `<h3 class="text-lg font-semibold text-purple-600 mb-2">Tournament Winner Odds (Margin: ${marginPercent}%)</h3>`;
-            html += `<table id="winner-odds-table" class="odds-table text-xs sm:text-sm"><thead><tr><th data-col="teamName" class="cursor-pointer select-none">Selection<span class="sort-ind"></span></th><th data-col="winProbability" class="cursor-pointer select-none">Prob<span class="sort-ind"> ↓</span></th><th data-col="winnerOdd" class="cursor-pointer select-none">Odd<span class="sort-ind"></span></th></tr></thead><tbody id="winner-odds-tbody">`;
-            [...winnerSelections].sort((a, b) => b.winProbability - a.winProbability).forEach(({ teamName, winProbability, winnerOdd }) => {
-                html += `<tr><td>${teamName}</td><td>${(winProbability * 100).toFixed(1)}%</td><td>${winnerOdd}</td></tr>`;
-            });
-            html += `</tbody></table>`;
-            html += `<p class="text-xs text-gray-600 -mt-2 mb-2"><strong>Total winner market margin:</strong> ${totalWinnerMarginPercent.toFixed(2)}% (sum implied probability: ${(totalWinnerImpliedProbability * 100).toFixed(2)}%).</p>`;
+            let html = '';
 
-            if (!team) {
-                html += `<p class="text-xs text-gray-500">Tip: select a team to also view team-specific knockout and tournament totals markets.</p>`;
-                tournamentTeamOddsResultContentEl.innerHTML = html;
-                attachWinnerTableSort();
-                return;
+            // ===== SECTION 1: TEAM-SPECIFIC DEEP DIVE =====
+            if (selectedTeam && teamProgress[selectedTeam]) {
+                const stats = teamProgress[selectedTeam];
+
+                const rounds = [
+                    { label: 'Round of 32', short: 'R32', key: 'reachR32', color: '#6366f1' },
+                    { label: 'Round of 16', short: 'R16', key: 'reachR16', color: '#8b5cf6' },
+                    { label: 'Quarter-Final', short: 'QF', key: 'reachQF', color: '#ec4899' },
+                    { label: 'Semi-Final', short: 'SF', key: 'reachSF', color: '#f59e0b' },
+                    { label: 'Final', short: 'FINAL', key: 'reachFINAL', color: '#10b981' },
+                    { label: 'Tournament Win', short: 'WIN', key: 'winFINAL', color: '#f59e0b' },
+                ];
+
+                const maxReach = (stats.reachR32 || stats.reachR16 || 1);
+                const firstRoundCount = rounds.find(r => stats[r.key] > 0);
+                const baseCount = firstRoundCount ? (stats[firstRoundCount.key] || 1) : currentNumSims;
+
+                html += `<div style="margin-bottom:24px; padding:16px; background:linear-gradient(135deg,#1e1b4b,#312e81); border-radius:12px; color:white">`;
+                html += `<h3 style="font-size:1.1rem;font-weight:700;margin-bottom:4px">${selectedTeam} — Tournament Path Probabilities</h3>`;
+                html += `<p style="font-size:0.75rem;opacity:0.7;margin-bottom:16px">Based on ${currentNumSims.toLocaleString()} simulations</p>`;
+
+                // Round cards
+                html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px">`;
+                rounds.forEach(({ label, key, color }) => {
+                    const count = stats[key] || 0;
+                    const prob = count / currentNumSims;
+                    const odd = calculateOddWithMargin(prob, marginDecimal);
+                    html += `<div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:12px;border-left:3px solid ${color}">`;
+                    html += `<div style="font-size:0.65rem;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>`;
+                    html += `<div style="font-size:1.4rem;font-weight:800;line-height:1">${(prob * 100).toFixed(1)}%</div>`;
+                    html += `<div style="font-size:0.75rem;opacity:0.6;margin-top:2px">Odd: ${odd}</div>`;
+                    html += `</div>`;
+                });
+                html += `</div>`;
+
+                // Probability funnel bars
+                html += `<div style="margin-bottom:8px">`;
+                html += `<p style="font-size:0.7rem;opacity:0.6;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Probability Funnel</p>`;
+                rounds.forEach(({ label, key, color }) => {
+                    const count = stats[key] || 0;
+                    const prob = count / currentNumSims;
+                    const barWidth = (prob * 100).toFixed(1);
+                    html += `<div style="margin-bottom:8px">`;
+                    html += `<div style="display:flex;justify-content:space-between;font-size:0.7rem;margin-bottom:3px;opacity:0.85"><span>${label}</span><span>${barWidth}%</span></div>`;
+                    html += `<div style="background:rgba(255,255,255,0.1);border-radius:999px;height:6px;overflow:hidden">`;
+                    html += `<div style="height:100%;border-radius:999px;background:${color};width:${barWidth}%;transition:width 0.3s"></div>`;
+                    html += `</div></div>`;
+                });
+                html += `</div>`;
+
+                html += `</div>`;
+
+                // Probable Knockout Path (most common opponents at each stage)
+                if (simulationAggStats._knockout?._pathData) {
+                    const pathData = simulationAggStats._knockout._pathData[selectedTeam];
+                    if (pathData && Object.keys(pathData).length > 0) {
+                        html += `<div style="margin-bottom:24px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px">`;
+                        html += `<h4 style="font-size:0.95rem;font-weight:700;color:#166534;margin-bottom:4px">Most Probable Knockout Path</h4>`;
+                        html += `<p style="font-size:0.75rem;color:#15803d;margin-bottom:14px">Most frequent opponent at each stage across all simulations.</p>`;
+                        html += `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">`;
+
+                        const roundLabels = { R32: 'R32', R16: 'R16', QF: 'QF', SF: 'SF', FINAL: 'Final' };
+                        let first = true;
+                        Object.entries(roundLabels).forEach(([round, label]) => {
+                            const opponents = pathData[round];
+                            if (!opponents) return;
+                            const topOpp = Object.entries(opponents).sort((a,b) => b[1]-a[1])[0];
+                            if (!topOpp) return;
+                            const freq = (topOpp[1] / (stats[round === 'R32' ? 'reachR32' : round === 'R16' ? 'reachR16' : round === 'QF' ? 'reachQF' : round === 'SF' ? 'reachSF' : 'reachFINAL'] || 1) * 100).toFixed(0);
+                            if (!first) html += `<div style="color:#4ade80;font-size:1.1rem">→</div>`;
+                            first = false;
+                            html += `<div style="background:white;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;text-align:center">`;
+                            html += `<div style="font-size:0.6rem;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">${label}</div>`;
+                            html += `<div style="font-size:0.85rem;font-weight:700;color:#111827">${topOpp[0]}</div>`;
+                            html += `<div style="font-size:0.65rem;color:#6b7280">${freq}% of runs</div>`;
+                            html += `</div>`;
+                        });
+                        html += `</div></div>`;
+                    }
+                }
+
+                // Team Goals markets
+                const goalsForAvg = (stats.tournamentGfSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
+                const goalsAgainstAvg = (stats.tournamentGaSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
+                const gamesAvg = (stats.tournamentGamesSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
+
+                html += `<details open style="margin-bottom:16px"><summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:#374151;padding:8px 0">Tournament Goals O/U Markets</summary>`;
+                html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Goals Scored O/U <span class="expected-value-info">(Avg: ${goalsForAvg.toFixed(2)})</span></h4>`;
+                html += renderOverUnderRows(stats.tournamentGfSims, [Math.max(0.5, Math.floor(goalsForAvg) - 0.5), Math.floor(goalsForAvg) + 0.5, Math.floor(goalsForAvg) + 1.5], marginDecimal);
+                html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Goals Conceded O/U <span class="expected-value-info">(Avg: ${goalsAgainstAvg.toFixed(2)})</span></h4>`;
+                html += renderOverUnderRows(stats.tournamentGaSims, [Math.max(0.5, Math.floor(goalsAgainstAvg) - 0.5), Math.floor(goalsAgainstAvg) + 0.5, Math.floor(goalsAgainstAvg) + 1.5], marginDecimal);
+                html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Total Games O/U <span class="expected-value-info">(Avg: ${gamesAvg.toFixed(2)})</span></h4>`;
+                html += renderOverUnderRows(stats.tournamentGamesSims, [2.5, 3.5, 4.5, 5.5, 6.5], marginDecimal);
+                html += `</details>`;
+
+                html += `<hr style="margin:24px 0;border-color:#e5e7eb">`;
             }
 
-            const stats = teamProgress[team];
-            if (!stats) {
-                html += `<p class="text-xs text-red-500">No team-level knockout/tournament stats available for ${team}.</p>`;
-                tournamentTeamOddsResultContentEl.innerHTML = html;
-                attachWinnerTableSort();
-                return;
+            // ===== SECTION 2: ALL-TEAMS WINNER MARKET =====
+            html += `<h3 class="text-lg font-semibold text-purple-600 mb-2">Tournament Winner Odds (Margin: ${marginPercent}%)</h3>`;
+            html += `<table id="winner-odds-table" class="odds-table text-xs sm:text-sm"><thead><tr>`;
+            html += `<th data-col="teamName" class="cursor-pointer select-none">Team<span class="sort-ind"></span></th>`;
+            html += `<th data-col="winProbability" class="cursor-pointer select-none">Win %<span class="sort-ind"> ↓</span></th>`;
+            html += `<th data-col="winnerOdd" class="cursor-pointer select-none">Odd<span class="sort-ind"></span></th>`;
+            html += `</tr></thead><tbody id="winner-odds-tbody"></tbody></table>`;
+            html += `<p class="text-xs text-gray-600 mt-1 mb-4"><strong>Total market margin:</strong> ${totalWinnerMarginPercent.toFixed(2)}% (sum implied: ${(totalWinnerImpliedProbability * 100).toFixed(2)}%).</p>`;
+
+            if (!selectedTeam) {
+                html += `<p class="text-xs text-gray-500">💡 Select a team above to view their detailed round-by-round breakdown and most probable knockout path.</p>`;
             }
-
-            const marketRows = [
-                ['Reach Round 16', stats.reachR16], ['Reach Quarterfinals', stats.reachQF], ['Reach Semifinals', stats.reachSF],
-                ['Reach Final', stats.reachFINAL], ['Eliminate in Round 32', stats.eliminateR32], ['Eliminate in Round 16', stats.eliminateR16],
-                ['Eliminate in Quarterfinals', stats.eliminateQF], ['Eliminate in Semifinals', stats.eliminateSF], ['Runner-up', stats.runnerUpCount],
-                ['Winner', stats.winFINAL], ['3rd place', stats.thirdPlaceCount]
-            ];
-
-            html += `<h3 class="text-lg font-semibold text-purple-600 mt-4 mb-2">${team} Team Tournament Odds</h3>`;
-            html += `<table class="odds-table text-xs sm:text-sm"><thead><tr><th>Market</th><th>Prob</th><th>Odd</th></tr></thead><tbody>`;
-            marketRows.forEach(([label, count]) => {
-                const prob = (count || 0) / currentNumSims;
-                html += `<tr><td>${label}</td><td>${(prob * 100).toFixed(1)}%</td><td>${calculateOddWithMargin(prob, marginDecimal)}</td></tr>`;
-            });
-            html += `</tbody></table>`;
-
-            const goalsForAvg = (stats.tournamentGfSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
-            const goalsAgainstAvg = (stats.tournamentGaSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
-            const gamesAvg = (stats.tournamentGamesSims || []).reduce((a, b) => a + b, 0) / currentNumSims;
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Scored Goals in Tournament O/U <span class="expected-value-info">(Avg: ${goalsForAvg.toFixed(2)})</span></h4>`;
-            html += renderOverUnderRows(stats.tournamentGfSims, [Math.max(0.5, Math.floor(goalsForAvg) - 0.5), Math.floor(goalsForAvg) + 0.5, Math.floor(goalsForAvg) + 1.5], marginDecimal);
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Received Goals in Tournament O/U <span class="expected-value-info">(Avg: ${goalsAgainstAvg.toFixed(2)})</span></h4>`;
-            html += renderOverUnderRows(stats.tournamentGaSims, [Math.max(0.5, Math.floor(goalsAgainstAvg) - 0.5), Math.floor(goalsAgainstAvg) + 0.5, Math.floor(goalsAgainstAvg) + 1.5], marginDecimal);
-            html += `<h4 class="font-medium text-gray-700 mt-3 mb-1">Total Games in Tournament O/U <span class="expected-value-info">(Avg: ${gamesAvg.toFixed(2)})</span></h4>`;
-            html += renderOverUnderRows(stats.tournamentGamesSims, [2.5, 3.5, 4.5, 5.5, 6.5], marginDecimal);
 
             tournamentTeamOddsResultContentEl.innerHTML = html;
+            renderWinnerOddsTable();
             attachWinnerTableSort();
         });
+
 
         calculateCustomProbAndOddButtonEl.addEventListener('click', () => {
             const groupKey = simGroupSelectEl.value;

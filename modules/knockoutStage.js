@@ -91,7 +91,8 @@ export function runKnockoutStage({
     thirdRankedList,
     simTournamentTotals,
     simulateKnockoutMatch,
-    incrementRoundReach
+    incrementRoundReach,
+    recordMatchupInPath
 }) {
     if (!parsedBracketMatches.length) return;
     const roundOrder = { R32: 1, R16: 2, QF: 3, SF: 4, '3RD': 5, FINAL: 6 };
@@ -119,6 +120,7 @@ export function runKnockoutStage({
             assignments.forEach(({ match, teamA, teamB }) => {
                 incrementRoundReach(aggStats, teamA, match.round);
                 incrementRoundReach(aggStats, teamB, match.round);
+                if (recordMatchupInPath) recordMatchupInPath(aggStats, teamA, teamB, match.round);
 
                 const { winner, loser, goalsA, goalsB } = simulateKnockoutMatch(teamA, teamB);
                 if (simTournamentTotals[teamA]) {
