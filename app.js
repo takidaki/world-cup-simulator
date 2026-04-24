@@ -1,6 +1,13 @@
 import { runKnockoutStage } from './modules/knockoutStage.js';
 import { initializeKnockoutStats, incrementRoundReach, recordMatchupInPath } from './modules/knockoutStats.js';
 import { initializeTabSwitching } from './modules/uiTabs.js';
+import { fetchOfficialSchedule, getTeamGroupMapping } from './modules/api/scheduleLoader.js';
+import { processMatchOddsData } from './modules/data/matchOddsProcessor.js';
+import { TEAM_NAME_MAPPING } from './modules/api/teamNameMapping.js';
+import { initializeTeamMapper } from './modules/ui/teamMapper.js';
+import { renderStatus as renderStatusUI, showInlineError } from './modules/ui/statusRenderer.js';
+import { getOddsApiKey, setOddsApiKey, getGroupMappingData, setGroupMappingData, removeGroupMappingData } from './utils/storage.js';
+import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './utils/html.js';
 
                 // --- Tab Switching Logic ---
         initializeTabSwitching();
@@ -10,6 +17,25 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         let lockedScenarios = {}; // key: "team1||team2", value: { g1, g2 }
         let currentDCRho = 0;
         let currentLanguage = 'en';
+        let manualGroupMapping = null; // Custom team-to-group mapping from admin panel
+        let lastFetchedApiData = null; // Store last API response for team mapper
+        let officialScheduleData = null; // Official 2026 WC schedule from JSON
+
+        // --- Wrapper Functions for Modularized Code ---
+        // These wrappers maintain compatibility with existing code while using new modules
+
+        async function loadOfficialSchedule() {
+            officialScheduleData = await fetchOfficialSchedule();
+            return officialScheduleData;
+        }
+
+        function processOddsData(matches, useScheduleGroups = false) {
+            return processMatchOddsData(matches, {
+                manualGroupMapping,
+                scheduleData: officialScheduleData,
+                useScheduleGroups
+            });
+        }
 
         // --- Localization ---
         const translations = {
@@ -75,7 +101,19 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const bracketCsvFileInputEl = document.getElementById('bracketCsvFileInput'), bracketCsvFileNameEl = document.getElementById('bracketCsvFileName');
         const bracketDataEl = document.getElementById('bracketData');
         const outrightsDataEl = document.getElementById('outrightsData'), oddsApiKeyEl = document.getElementById('oddsApiKey');
-        const fetchOutrightsBtnEl = document.getElementById('fetchOutrightsBtn'), fetchOutrightsStatusEl = document.getElementById('fetchOutrightsStatus');
+        const fetchAllOddsBtnEl = document.getElementById('fetchAllOddsBtn'), fetchAllOddsStatusEl = document.getElementById('fetchAllOddsStatus');
+        const groupMappingDataEl = document.getElementById('groupMappingData');
+        const groupMappingFileInputEl = document.getElementById('groupMappingFileInput'), groupMappingFileNameEl = document.getElementById('groupMappingFileName');
+        const applyGroupMappingBtnEl = document.getElementById('applyGroupMappingBtn'), clearGroupMappingBtnEl = document.getElementById('clearGroupMappingBtn');
+        const groupMappingStatusEl = document.getElementById('groupMappingStatus');
+        const loadTeamsBtnEl = document.getElementById('loadTeamsBtn');
+        const loadTeamsFromScheduleBtnEl = document.getElementById('loadTeamsFromScheduleBtn');
+        const teamMappingTableContainerEl = document.getElementById('teamMappingTableContainer');
+        const teamMappingTableBodyEl = document.getElementById('teamMappingTableBody');
+        const teamMapperPlaceholderEl = document.getElementById('teamMapperPlaceholder');
+        const saveTeamMappingBtnEl = document.getElementById('saveTeamMappingBtn');
+        const resetTeamMappingBtnEl = document.getElementById('resetTeamMappingBtn');
+        const teamMappingSaveStatusEl = document.getElementById('teamMappingSaveStatus');
         const simGroupSelectEl = document.getElementById('simGroupSelect'), simBookieMarginEl = document.getElementById('simBookieMargin');
         const showSimulatedOddsButtonEl = document.getElementById('showSimulatedOddsButton');
         const calculatedOddsResultContentEl = document.getElementById('calculatedOddsResultContent'), simulatedOddsStatusEl = document.getElementById('simulatedOddsStatus');
@@ -111,10 +149,13 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const multiGroupMarginEl = document.getElementById('multiGroupMargin');
         const langToggleBtnEl = document.getElementById('langToggleBtn');
         const matchDataSectionEl = document.getElementById('matchDataSection');
+        const apiDataSectionEl = document.getElementById('apiDataSection');
         const eloSectionEl = document.getElementById('eloSection');
+        const inputModeHintEl = document.getElementById('inputModeHint');
         const exportRawDataErrorEl = document.getElementById('exportRawDataError');
         const generateTeamCsvErrorEl = document.getElementById('generateTeamCsvError');
         const generateGroupCsvErrorEl = document.getElementById('generateGroupCsvError');
+        const powerRatingsContentEl = document.getElementById('powerRatingsContent');
 
         function syncSimulationPresetFromInput() {
             const trimmedValue = numSimulationsEl.value.trim();
@@ -138,60 +179,204 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         // --- Odds API Logic ---
         if (oddsApiKeyEl) {
-            oddsApiKeyEl.value = localStorage.getItem('odds_api_key') || '';
-            oddsApiKeyEl.addEventListener('input', () => localStorage.setItem('odds_api_key', oddsApiKeyEl.value));
+            oddsApiKeyEl.value = getOddsApiKey();
+            oddsApiKeyEl.addEventListener('input', () => setOddsApiKey(oddsApiKeyEl.value));
         }
 
-        if (fetchOutrightsBtnEl) {
-            fetchOutrightsBtnEl.addEventListener('click', async () => {
-                const key = oddsApiKeyEl.value.trim();
-                if (!key) {
-                    fetchOutrightsStatusEl.innerHTML = '<span class="text-red-500">Please enter an API key first.</span>';
+        // --- Group Mapping Admin Logic ---
+        if (groupMappingDataEl) {
+            // Load saved mapping from localStorage
+            groupMappingDataEl.value = getGroupMappingData();
+            groupMappingDataEl.addEventListener('input', () => {
+                setGroupMappingData(groupMappingDataEl.value);
+            });
+        }
+
+        if (groupMappingFileInputEl) {
+            groupMappingFileInputEl.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                groupMappingFileNameEl.textContent = file.name;
+                const text = await file.text();
+                groupMappingDataEl.value = text;
+                setGroupMappingData(text);
+                groupMappingStatusEl.innerHTML = '<span class="text-green-500">File loaded. Click "Apply Mapping" to use it.</span>';
+            });
+        }
+
+        if (applyGroupMappingBtnEl) {
+            applyGroupMappingBtnEl.addEventListener('click', () => {
+                const rawData = groupMappingDataEl.value.trim();
+                if (!rawData) {
+                    groupMappingStatusEl.innerHTML = '<span class="text-red-500">Please enter mapping data first.</span>';
                     return;
                 }
-                fetchOutrightsBtnEl.disabled = true;
-                fetchOutrightsBtnEl.textContent = 'Fetching...';
-                fetchOutrightsStatusEl.innerHTML = '<span class="text-blue-500">Contacting The Odds API...</span>';
+
                 try {
-                    const response = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup_winner/odds/?apiKey=${key}&regions=eu,uk&markets=outrights`);
-                    if (!response.ok) throw new Error(`API error: ${response.status} ${response.statusText}`);
-                    const data = await response.json();
-                    outrightsDataEl.value = JSON.stringify(data, null, 2);
-                    fetchOutrightsStatusEl.innerHTML = '<span class="text-green-500 font-medium">Successfully fetched outright odds!</span>';
+                    // Try parsing as JSON first
+                    if (rawData.startsWith('{') || rawData.startsWith('[')) {
+                        manualGroupMapping = JSON.parse(rawData);
+                        groupMappingStatusEl.innerHTML = '<span class="text-green-500 font-medium">✅ JSON mapping applied successfully!</span>';
+                    } else {
+                        // Parse as CSV: GROUP,TEAM
+                        const lines = rawData.split('\n').map(l => l.trim()).filter(l => l);
+                        manualGroupMapping = {};
+
+                        for (const line of lines) {
+                            const parts = line.split(',').map(p => p.trim());
+                            if (parts.length < 2) continue;
+
+                            const [group, team] = parts;
+                            if (!manualGroupMapping[group]) {
+                                manualGroupMapping[group] = [];
+                            }
+                            manualGroupMapping[group].push(team);
+                        }
+
+                        const groupCount = Object.keys(manualGroupMapping).length;
+                        const teamCount = Object.values(manualGroupMapping).flat().length;
+                        groupMappingStatusEl.innerHTML = `<span class="text-green-500 font-medium">✅ CSV mapping applied: ${groupCount} groups, ${teamCount} teams</span>`;
+                    }
+
+                    // Show summary
+                    const summary = Object.entries(manualGroupMapping)
+                        .map(([g, teams]) => `Group ${g}: ${teams.length} teams`)
+                        .join(', ');
+                    groupMappingStatusEl.innerHTML += `<br><span class="text-slate-600 text-xs">${summary}</span>`;
+
                 } catch (e) {
-                    fetchOutrightsStatusEl.innerHTML = `<span class="text-red-500 font-medium">Fetch failed: ${e.message}</span>`;
+                    groupMappingStatusEl.innerHTML = `<span class="text-red-500">Parse error: ${e.message}</span>`;
+                    console.error('Group mapping parse error:', e);
+                }
+            });
+        }
+
+        if (clearGroupMappingBtnEl) {
+            clearGroupMappingBtnEl.addEventListener('click', () => {
+                manualGroupMapping = null;
+                groupMappingDataEl.value = '';
+                removeGroupMappingData();
+                groupMappingFileNameEl.textContent = 'No file selected';
+                if (groupMappingFileInputEl) groupMappingFileInputEl.value = '';
+                groupMappingStatusEl.innerHTML = '<span class="text-slate-500">Manual mapping cleared. Will use auto-detection.</span>';
+            });
+        }
+
+        // --- Interactive Team Mapper Logic ---
+        // Initialize team mapper with modular code
+        initializeTeamMapper({
+            // DOM elements
+            loadFromScheduleBtn: loadTeamsFromScheduleBtnEl,
+            loadFromApiBtn: loadTeamsBtnEl,
+            saveBtn: saveTeamMappingBtnEl,
+            resetBtn: resetTeamMappingBtnEl,
+            tableBody: teamMappingTableBodyEl,
+            tableContainer: teamMappingTableContainerEl,
+            placeholder: teamMapperPlaceholderEl,
+            statusElement: teamMappingSaveStatusEl,
+            groupMappingTextarea: groupMappingDataEl,
+            matchDataTextarea: matchDataEl,
+
+            // Callbacks and data providers
+            getOfficialSchedule: () => officialScheduleData,
+            loadOfficialSchedule: loadOfficialSchedule,
+            getApiMatchData: () => lastFetchedApiData,
+            getExistingMapping: () => manualGroupMapping,
+            setManualMapping: (mapping) => { manualGroupMapping = mapping; },
+            processOddsData: processOddsData,
+            getTeamGroupMapping: getTeamGroupMapping
+        });
+
+        // --- Unified Odds Fetching Logic (Matches + Tournament) ---
+        if (fetchAllOddsBtnEl) {
+            fetchAllOddsBtnEl.addEventListener('click', async () => {
+                const key = oddsApiKeyEl.value.trim();
+                if (!key) {
+                    fetchAllOddsStatusEl.innerHTML = '<span class="text-red-500">Please enter an API key first.</span>';
+                    return;
+                }
+
+                fetchAllOddsBtnEl.disabled = true;
+                const originalText = fetchAllOddsBtnEl.innerHTML;
+                fetchAllOddsBtnEl.innerHTML = '<svg class="animate-spin inline mr-2" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" opacity="0.75"/></svg>Fetching...';
+
+                let statusParts = [];
+                let totalRemaining = null;
+
+                try {
+                    // Step 0: Fetch Official Schedule (if not already loaded)
+                    if (!officialScheduleData) {
+                        fetchAllOddsStatusEl.innerHTML = '<span class="text-blue-500">📅 Loading official 2026 World Cup schedule...</span>';
+                        await loadOfficialSchedule();
+                        if (officialScheduleData) {
+                            statusParts.push('<span class="text-green-500 font-medium">✅ Official schedule loaded (104 matches, 12 groups)</span>');
+                        }
+                    }
+
+                    // Step 1: Fetch Match Odds
+                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>') + '<br><span class="text-blue-500">📊 Fetching match odds...</span>';
+
+                    const matchResponse = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?apiKey=${key}&regions=eu&markets=h2h,totals&oddsFormat=decimal`);
+                    if (!matchResponse.ok) {
+                        const errorText = await matchResponse.text();
+                        throw new Error(`Match odds API error: ${matchResponse.status} - ${errorText}`);
+                    }
+
+                    totalRemaining = matchResponse.headers.get('x-requests-remaining');
+                    const matchData = await matchResponse.json();
+                    lastFetchedApiData = matchData; // Store for team mapper
+                    const useSchedule = officialScheduleData !== null && !manualGroupMapping;
+                    const matchResult = processOddsData(matchData, useSchedule);
+
+                    if (matchResult.csvLines.length === 0) {
+                        statusParts.push('<span class="text-amber-500">⚠️ Match odds: No matches found with complete data</span>');
+                    } else {
+                        matchDataEl.value = matchResult.csvLines.join('\n');
+                        statusParts.push(`<span class="text-green-500 font-medium">✅ Match odds: ${matchResult.processedCount} matches fetched</span>`);
+                        if (matchResult.skippedCount > 0) {
+                            statusParts.push(`<span class="text-amber-500 text-xs ml-4">⚠️ Skipped ${matchResult.skippedCount} matches (incomplete data)</span>`);
+                        }
+                    }
+
+                    // Step 2: Fetch Tournament Outrights
+                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>') + '<br><span class="text-blue-500">🏆 Fetching tournament outrights...</span>';
+
+                    const outrightsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup_winner/odds/?apiKey=${key}&regions=eu,uk&markets=outrights`);
+                    if (!outrightsResponse.ok) {
+                        throw new Error(`Outrights API error: ${outrightsResponse.status} ${outrightsResponse.statusText}`);
+                    }
+
+                    totalRemaining = outrightsResponse.headers.get('x-requests-remaining');
+                    const outrightsData = await outrightsResponse.json();
+                    outrightsDataEl.value = JSON.stringify(outrightsData, null, 2);
+                    statusParts.push('<span class="text-green-500 font-medium">✅ Tournament outrights: Successfully fetched</span>');
+
+                    // Final status
+                    if (totalRemaining) {
+                        statusParts.push(`<span class="text-blue-500 text-xs mt-2 inline-block">📊 API Quota: ${totalRemaining} requests remaining (used 2 requests)</span>`);
+                    }
+                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>');
+
+                } catch (e) {
+                    const errorMsg = `<span class="text-red-500 font-medium">❌ Fetch failed: ${e.message}</span>`;
+                    if (statusParts.length > 0) {
+                        fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>') + '<br>' + errorMsg;
+                    } else {
+                        fetchAllOddsStatusEl.innerHTML = errorMsg;
+                    }
+                    console.error('Odds fetch error:', e);
                 } finally {
-                    fetchOutrightsBtnEl.disabled = false;
-                    fetchOutrightsBtnEl.textContent = 'Fetch Odds';
+                    fetchAllOddsBtnEl.disabled = false;
+                    fetchAllOddsBtnEl.innerHTML = originalText;
                 }
             });
         }
 
         // --- Status Bar Helper ---
-        const _STATUS_ICONS = {
-            success: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>`,
-            error:   `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-            warning: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-            info:    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
-        };
-
-        function renderStatus(type, message, { detail = null, items = [], warnings = [] } = {}) {
-            const icon = _STATUS_ICONS[type] || _STATUS_ICONS.info;
-            let html = `<div class="status-bar status-${type}"><span class="status-icon">${icon}</span><div class="status-body"><p>${message}</p>`;
-            if (detail) html += `<p>${detail}</p>`;
-            if (items.length) html += `<ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`;
-            html += `</div></div>`;
-            if (warnings.length) {
-                html += `<div class="status-bar status-warning" style="margin-top:0.375rem"><span class="status-icon">${_STATUS_ICONS.warning}</span><div class="status-body"><p>Warnings (${warnings.length}):</p><ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul></div></div>`;
-            }
-            statusAreaEl.innerHTML = html;
-        }
-
-        function showInlineError(el, msg, duration = 4000) {
-            if (!el) return;
-            el.textContent = msg;
-            el.classList.add('visible');
-            if (duration > 0) setTimeout(() => el.classList.remove('visible'), duration);
+        // Wrapper function for modularized status renderer
+        function renderStatus(type, message, options = {}) {
+            renderStatusUI(statusAreaEl, type, message, options);
         }
 
         // --- Probability CSS Class Helper ---
@@ -209,7 +394,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 return;
             }
 
-            const teamRows = [];
+            // Calculate team statistics
             const teamStats = {};
             parsedMatches.forEach(match => {
                 if (!teamStats[match.team1]) teamStats[match.team1] = { group: match.group, matches: 0, lambdaFor: 0, lambdaAgainst: 0, xPts: 0 };
@@ -224,84 +409,24 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 teamStats[match.team2].xPts += (3 * match.p2) + match.px;
             });
 
-            Object.entries(teamStats)
+            // Convert to array and sort for team lambda table
+            const sortedTeamStats = Object.entries(teamStats)
                 .sort(([teamA, statsA], [teamB, statsB]) => statsA.group.localeCompare(statsB.group) || teamA.localeCompare(teamB))
-                .forEach(([team, stats]) => {
-                    teamRows.push(`
-                        <tr>
-                            <td>${stats.group}</td>
-                            <td class="font-medium">${team}</td>
-                            <td>${stats.matches}</td>
-                            <td>${stats.xPts.toFixed(3)}</td>
-                            <td>${stats.lambdaFor.toFixed(3)}</td>
-                            <td>${stats.lambdaAgainst.toFixed(3)}</td>
-                            <td>${(stats.lambdaFor - stats.lambdaAgainst).toFixed(3)}</td>
-                        </tr>
-                    `);
-                });
+                .map(([team, stats]) => ({ team, ...stats }));
 
-            lambdaViewContentEl.innerHTML = `
-                <div class="mb-6">
-                    <h3 class="text-base font-semibold text-gray-700 mb-2">Team Group-Stage Lambda Sums</h3>
-                    <div class="overflow-x-auto">
-                        <table class="odds-table text-xs sm:text-sm">
-                            <thead>
-                                <tr>
-                                    <th>Group</th>
-                                    <th>Team</th>
-                                    <th>Matches</th>
-                                    <th>xPts Sum</th>
-                                    <th>Lambda For Sum</th>
-                                    <th>Lambda Against Sum</th>
-                                    <th>Net Lambda Sum</th>
-                                </tr>
-                            </thead>
-                            <tbody>${teamRows.join('')}</tbody>
-                        </table>
-                    </div>
-                </div>
-                <div>
-                    <h3 class="text-base font-semibold text-gray-700 mb-2">Match Lambdas</h3>
-                    <div class="overflow-x-auto">
-                        <table class="odds-table text-xs sm:text-sm">
-                            <thead>
-                                <tr>
-                                    <th>Group</th>
-                                    <th>Line</th>
-                                    <th>Team 1</th>
-                                    <th>Team 2</th>
-                                    <th>Team 1 xPts</th>
-                                    <th>Team 2 xPts</th>
-                                    <th>Lambda 1</th>
-                                    <th>Lambda 2</th>
-                                    <th>Total</th>
-                                    <th>Supremacy</th>
-                                    <th>ρ</th>
-                                </tr>
-                            </thead>
-                            <tbody>${parsedMatches
-                                .slice()
-                                .sort((a, b) => a.group.localeCompare(b.group) || a.lineNum - b.lineNum)
-                                .map(match => `
-                                    <tr>
-                                        <td>${match.group}</td>
-                                        <td>${match.lineNum}</td>
-                                        <td class="font-medium">${match.team1}</td>
-                                        <td class="font-medium">${match.team2}</td>
-                                        <td>${((3 * match.p1) + match.px).toFixed(3)}</td>
-                                        <td>${((3 * match.p2) + match.px).toFixed(3)}</td>
-                                        <td>${match.lambda1.toFixed(3)}</td>
-                                        <td>${match.lambda2.toFixed(3)}</td>
-                                        <td>${(match.lambda1 + match.lambda2).toFixed(3)}</td>
-                                        <td>${(match.lambda1 - match.lambda2).toFixed(3)}</td>
-                                        <td>${(match.matchRho != null ? match.matchRho.toFixed(3) : '—')}</td>
-                                    </tr>
-                                `)
-                                .join('')}</tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
+            // Sort matches for match lambda table
+            const sortedMatches = parsedMatches
+                .slice()
+                .sort((a, b) => a.group.localeCompare(b.group) || a.lineNum - b.lineNum);
+
+            // Create HTML sections using utilities
+            const teamSection = createSection('Team Group-Stage Lambda Sums', createTeamLambdaTable(sortedTeamStats));
+            const matchSection = createSection('Match Lambdas', createMatchLambdaTable(sortedMatches));
+
+            // Clear and append sections
+            lambdaViewContentEl.innerHTML = '';
+            lambdaViewContentEl.appendChild(teamSection);
+            lambdaViewContentEl.appendChild(matchSection);
         }
 
         const tieBreakRulePresets = {
@@ -434,20 +559,35 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const isEloMode = mode === 'elo';
             const isHybridMode = mode === 'hybrid';
             const isOddsMode = mode === 'odds';
+            const isApiMode = mode === 'api';
 
-            // Show/hide whole sections instead of just disabling
-            if (matchDataSectionEl) matchDataSectionEl.classList.toggle('hidden', isEloMode);
-            if (eloSectionEl) eloSectionEl.classList.toggle('hidden', isOddsMode);
+            // Show/hide sections based on mode
+            if (matchDataSectionEl) matchDataSectionEl.classList.toggle('hidden', isEloMode || isApiMode);
+            if (apiDataSectionEl) apiDataSectionEl.classList.toggle('hidden', !isApiMode);
+            if (eloSectionEl) eloSectionEl.classList.toggle('hidden', isOddsMode || isApiMode);
+
+            // Update hint text
+            if (inputModeHintEl) {
+                if (isApiMode) {
+                    inputModeHintEl.textContent = 'API mode: Click "Fetch All Odds" button at the top to get live match odds automatically.';
+                } else if (isEloMode) {
+                    inputModeHintEl.textContent = 'Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.';
+                } else if (isHybridMode) {
+                    inputModeHintEl.textContent = 'Hybrid mode: Combine known match odds with Elo-generated fixtures for remaining rounds.';
+                } else {
+                    inputModeHintEl.textContent = 'Manual mode: Paste or import match odds data in CSV format.';
+                }
+            }
 
             // Keep disabled flags in sync for form submission safety
-            matchDataEl.disabled = isEloMode;
-            csvFileInputEl.disabled = isEloMode;
-            eloDataEl.disabled = isOddsMode;
-            eloCsvFileInputEl.disabled = isOddsMode;
+            matchDataEl.disabled = isEloMode || isApiMode;
+            if (csvFileInputEl) csvFileInputEl.disabled = isEloMode || isApiMode;
+            if (eloDataEl) eloDataEl.disabled = isOddsMode || isApiMode;
+            if (eloCsvFileInputEl) eloCsvFileInputEl.disabled = isOddsMode || isApiMode;
 
             parseButtonEl.textContent = isEloMode
                 ? 'Parse Elo & Build Fixtures'
-                : (isHybridMode ? 'Parse Hybrid Data' : 'Parse & Validate Data');
+                : (isHybridMode ? 'Parse Hybrid Data' : (isApiMode ? 'Parse API Data' : 'Parse & Validate Data'));
         }
         inputModeEl.addEventListener('change', updateInputModeUi);
         
@@ -790,7 +930,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         }
 
         function buildCsvRow(cells) {
-            return cells.map(csvEscape).join(',') + '\n';
+            return cells.map(csvEscape).join(';') + '\n';
         }
 
         function average(values) {
@@ -1306,6 +1446,55 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             }
         }
 
+        function displayPowerRatingsInNewTab() {
+            if (!teamMarketRatings || Object.keys(teamMarketRatings).length === 0) return;
+
+            const ratings = [];
+            allTeams.forEach(team => {
+                if (teamMarketRatings[team] && teamMarketRatings[team].games > 0) {
+                    const attack = teamMarketRatings[team].attack;
+                    const defense = teamMarketRatings[team].defense;
+                    const power = attack / defense;
+                    ratings.push({ team, attack, defense, power });
+                }
+            });
+
+            if (ratings.length === 0) return;
+
+            ratings.sort((a, b) => b.power - a.power);
+
+            const tableHtml = `
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; background: white;">
+                        <thead>
+                            <tr style="background: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                                <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #1e293b;">Rank</th>
+                                <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #1e293b;">Team</th>
+                                <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #1e293b;">Power Rating</th>
+                                <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #1e293b;">Attack Rating</th>
+                                <th style="padding: 12px 15px; text-align: left; font-weight: 600; color: #1e293b;">Defense Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${ratings.map((r, i) => `
+                            <tr style="border-bottom: 1px solid #e2e8f0; ${i % 2 === 0 ? 'background: #f8fafc;' : ''}">
+                                <td style="padding: 12px 15px; color: #334155;">${i + 1}</td>
+                                <td style="padding: 12px 15px; color: #334155; font-weight: 500;">${r.team}</td>
+                                <td style="padding: 12px 15px; color: #334155;">${r.power.toFixed(4)}</td>
+                                <td style="padding: 12px 15px; color: #334155;">${r.attack.toFixed(4)}</td>
+                                <td style="padding: 12px 15px; color: #334155;">${r.defense.toFixed(4)}</td>
+                            </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            if (powerRatingsContentEl) {
+                powerRatingsContentEl.innerHTML = tableHtml;
+            }
+        }
+
         function getKnockoutLambdas(teamA, teamB) {
             let lambdaA = 1.3;
             let lambdaB = 1.3;
@@ -1542,6 +1731,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             const coreParsed = mode === 'elo'
                 ? parseEloInputData()
                 : (mode === 'hybrid' ? parseHybridInputData() : parseOddsInputData());
+            // Note: 'api' mode uses the same parseOddsInputData() since data is already in matchData textarea
             const bracketParsed = parseBracketInputData();
             const shouldParseEloForKnockout = parsedBracketMatches.length > 0 || mode === 'elo' || mode === 'hybrid';
             const eloParsed = shouldParseEloForKnockout ? parseTeamEloRatingsData() : { errors: [], warnings: [], eloMap: {} };
@@ -1565,6 +1755,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
                 deriveTeamRatingsFromLambdas(); // Process the group odds to get team attack/defense ratings
                 calibrateRatingsToOutrights(); // Tweak ratings if outrights exist
+                displayPowerRatingsInNewTab(); // Display calculated power ratings in a new tab
 
                 const modeLabel = mode === 'elo' ? 'Elo-generated fixtures' : (mode === 'hybrid' ? 'hybrid (odds + Elo fill)' : 'odds input');
                 renderStatus('success', `Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} groups, ${allTeams.size} teams (${modeLabel}).`, {
@@ -2792,80 +2983,80 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             renderLambdaView();
         });
 
-        // --- Initial Sample Data ---
-        inputModeEl.value = 'hybrid';
-        matchDataEl.value = `A	Mexico	vs	South Africa	1.52	4.07	5.99	1.87	1.92
-A	South Korea	vs	Czech Republic	2.58	3.18	2.7	1.67	2.2
-B	Canada	vs	Bosnia and Herzegovina	1.93	3.64	4.25	1.67	2.15
-B	Qatar	vs	Switzerland	8.5	5.65	1.3	2.23	1.62
-C	Haiti	vs	Scotland	6.58	5.2	1.38	2.07	1.74
-C	Brazil	vs	Morocco	1.5	4	6	1.9	1.9
-D	USA	vs	Paraguay	1.9	3.7	3.7	1.81	1.99
-D	Australia	vs	Turkey	4	3.5	1.9	1.73	2.1
-E	Germany	vs	Curaçao	1.02	21	41	5	1.17
-E	Ivory Coast	vs	Ecuador	3.3	2.9	2.4	1.51	2.5
-F	Netherlands	vs	Japan	2.02	3.44	3.61	1.9	1.9
-F	Sweden	vs	Tunisia	1.9	3.35	4	1.62	2.25
-G	Belgium	vs	Egypt	1.61	4.05	5	2	1.77
-G	Iran	vs	New Zealand	1.77	3.6	4.25	1.73	2.1
-H	Spain	vs	Cape Verde	1.06	11	23	3.4	1.33
-H	Saudi Arabia	vs	Uruguay	5.4	3.85	1.6	1.85	1.95
-I	France	vs	Senegal	1.4	4.68	7.12	2	1.8
-I	Iraq	vs	Norway	7.6	5.36	1.32	2.25	1.62
-J	Argentina	vs	Algeria	1.42	4.22	7.85	1.91	1.88
-J	Austria	vs	Jordan	1.35	5.06	7.75	2.25	1.62
-K	Portugal	vs	DR Congo	1.33	4.75	8	2.3	1.6
-K	Uzbekistan	vs	Colombia	7.45	4	1.41	1.96	1.82
-L	England	vs	Croatia	1.62	4.03	4.96	1.87	1.92
-L	Ghana	vs	Panama	2.03	3.79	3.28	1.8	2
-A	Czech Republic	vs	South Africa	1.74	3.45	5.2	2.15	1.65
-A	Mexico	vs	South Korea	1.9	3.4	4.3	1.62	2.35
-B	Switzerland	vs	Bosnia and Herzegovina	1.65	3.65	5.8	1.95	1.85
-B	Canada	vs	Qatar	1.57	3.8	6.6	1.75	2.15
-C	Brazil	vs	Haiti	1.05	11	50	2.75	1.45
-C	Scotland	vs	Morocco	3.95	3.2	2.05	2.35	1.62
-D	Turkey	vs	Paraguay	2.15	3.2	3.6	2.3	1.65
-D	USA	vs	Australia	1.66	3.8	5.4	1.9	1.9
-E	Germany	vs	Ivory Coast	1.55	4	6.2	2.1	1.7
-E	Ecuador	vs	Curaçao	1.25	5.6	13	2	1.85
-F	Netherlands	vs	Sweden	1.75	3.8	4.6	2	1.85
-F	Tunisia	vs	Japan	4.7	3.4	1.83	1.55	2.45
-G	Belgium	vs	Iran	1.55	4	6.7	1.9	1.9
-G	New Zealand	vs	Egypt	5	3.75	1.7	1.75	2.15
-H	Spain	vs	Saudi Arabia	1.15	7.2	25	2.2	1.65
-H	Uruguay	vs	Cape Verde	1.45	4.5	7.2	1.85	1.95
-I	Norway	vs	Senegal	2.05	3.4	3.7	2	1.85
-I	France	vs	Iraq	1.13	7.2	25	2.15	1.75
-J	Argentina	vs	Austria	1.55	4	6.4	1.85	1.95
-J	Jordan	vs	Algeria	7.2	3.75	1.55	1.9	1.9
-K	Portugal	vs	Uzbekistan	1.18	6.8	17	2.35	1.6
-K	Colombia	vs	DR Congo	1.5	4	7	1.7	2.1
-L	England	vs	Ghana	1.35	4.9	9.2	1.95	1.85
-L	Panama	vs	Croatia	8.6	4.5	1.4	1.9	1.9
-A	South Africa	vs	South Korea	2.75	3.2	2.55	1.72	2.1
-A	Czech Republic	vs	Mexico	3.6	3.4	1.95	1.8	2
-B	Switzerland	vs	Canada	1.95	3.4	3.9	1.75	2.05
-B	Bosnia and Herzegovina	vs	Qatar	1.45	4.4	6.8	2.1	1.7
-C	Scotland	vs	Brazil	7.4	5	1.4	1.85	1.95
-C	Morocco	vs	Haiti	1.35	4.8	8.5	2	1.8
-D	Australia	vs	Paraguay	2.4	3.3	2.85	1.75	2.05
-D	Turkey	vs	USA	2.8	3.25	2.45	1.78	2.02
-E	Ecuador	vs	Germany	6.8	4.8	1.35	2.05	1.75
-E	Curaçao	vs	Ivory Coast	6.2	4.4	1.42	2	1.8
-F	Tunisia	vs	Netherlands	4.6	3.6	1.8	1.72	2.1
-F	Japan	vs	Sweden	2.55	3.2	2.65	1.7	2.15
-G	New Zealand	vs	Belgium	7.2	4.8	1.32	2.05	1.75
-G	Egypt	vs	Iran	2.35	3.15	2.95	1.68	2.2
-H	Uruguay	vs	Spain	4.9	3.8	1.7	1.82	2
-H	Cape Verde	vs	Saudi Arabia	3.6	3.3	2.05	1.75	2.05
-I	Norway	vs	France	5.8	4.2	1.5	1.95	1.85
-I	Senegal	vs	Iraq	1.75	3.5	4.6	1.8	2
-J	Jordan	vs	Argentina	9.5	5.2	1.25	2.1	1.7
-J	Algeria	vs	Austria	2.95	3.25	2.35	1.75	2.05
-K	Colombia	vs	Portugal	3.1	3.25	2.35	1.85	1.95
-K	DR Congo	vs	Uzbekistan	2.2	3.2	3.1	1.72	2.1
-L	Panama	vs	England	8.8	5	1.28	2.05	1.75
-L	Croatia	vs	Ghana	1.85	3.4	4.2	1.78	2.02`;
+        // --- Initial Sample Data (72 matches from match_odds_all_72.csv) ---
+        inputModeEl.value = 'odds';
+        matchDataEl.value = `A	Mexico	vs	South Africa	1.56	4.33	6.4	1.91	1.91
+A	South Korea	vs	Czech Republic	2.6	3.11	2.61	1.62	2.18
+B	Canada	vs	Bosnia & Herzegovina	1.86	3.55	3.72	1.65	2.13
+B	USA	vs	Paraguay	1.96	3.84	3.86	1.84	1.99
+C	Qatar	vs	Switzerland	12.0	5.8	1.3	2.25	1.66
+C	Brazil	vs	Morocco	1.65	3.92	6.0	1.89	1.93
+D	Haiti	vs	Scotland	7.1	5.05	1.45	2.02	1.81
+D	Australia	vs	Turkey	3.84	3.4	1.87	1.71	2.04
+E	Germany	vs	Curacao	1.03	20.0	85.0	1.83	2.0
+E	Netherlands	vs	Japan	1.97	3.75	3.94	1.92	1.9
+F	Ivory Coast	vs	Ecuador	3.52	2.9	2.5	1.51	2.6
+F	Sweden	vs	Tunisia	1.9	3.37	3.74	1.63	2.16
+G	Spain	vs	Cape Verde	1.1	10.5	35.0	1.94	1.88
+G	Belgium	vs	Egypt	1.69	4.2	5.05	2.03	1.8
+H	Saudi Arabia	vs	Uruguay	5.95	4.05	1.63	1.86	1.96
+H	Iran	vs	New Zealand	1.77	3.78	5.0	1.77	2.07
+I	France	vs	Senegal	1.47	4.6	7.6	1.97	1.85
+I	Iraq	vs	Norway	7.93	5.6	1.3	2.26	1.61
+J	Argentina	vs	Algeria	1.44	4.45	9.2	1.91	1.91
+J	Austria	vs	Jordan	1.36	5.4	9.2	2.29	1.64
+K	Portugal	vs	D.R. Congo	1.3	4.8	8.7	2.28	1.57
+K	England	vs	Croatia	1.69	4.1	5.2	1.87	1.95
+L	Ghana	vs	Panama	2.01	3.84	3.7	1.81	2.02
+L	Uzbekistan	vs	Colombia	8.4	4.65	1.44	1.97	1.85
+A	Czech Republic	vs	South Africa	1.92	3.48	3.65	1.75	2.05
+C	Switzerland	vs	Bosnia & Herzegovina	2.05	3.6	3.35	1.98	1.84
+B	Canada	vs	Qatar	1.45	4.4	8.0	1.72	2.1
+A	Mexico	vs	South Korea	1.97	3.65	3.75	1.85	1.95
+B	USA	vs	Australia	2.7	3.35	2.7	1.82	2.0
+D	Scotland	vs	Morocco	3.05	3.25	2.45	1.78	2.02
+C	Brazil	vs	Haiti	1.12	9.5	25.0	2.2	1.65
+D	Turkey	vs	Paraguay	2.05	3.5	3.45	1.83	1.98
+F	Netherlands	vs	Sweden	1.7	4.0	4.8	2.15	1.7
+E	Germany	vs	Ivory Coast	1.5	4.5	7.0	1.95	1.85
+E	Ecuador	vs	Curacao	1.32	5.1	11.0	2.05	1.75
+F	Tunisia	vs	Japan	3.35	3.3	2.25	1.72	2.12
+G	Spain	vs	Saudi Arabia	1.25	6.0	14.0	2.15	1.7
+H	Belgium	vs	Iran	1.45	4.5	7.8	1.98	1.82
+G	Uruguay	vs	Cape Verde	1.48	4.6	7.2	2.2	1.68
+H	New Zealand	vs	Egypt	3.75	3.35	2.05	1.64	2.25
+J	Argentina	vs	Austria	1.47	4.7	7.4	2.22	1.66
+I	France	vs	Iraq	1.15	8.5	19.0	2.35	1.58
+I	Norway	vs	Senegal	2.05	3.5	3.45	1.83	1.98
+J	Jordan	vs	Algeria	6.5	4.6	1.5	1.9	1.9
+K	Portugal	vs	Uzbekistan	1.2	7.5	16.0	2.3	1.62
+L	England	vs	Ghana	1.34	5.2	10.0	2.08	1.76
+L	Panama	vs	Croatia	7.5	4.9	1.42	2.0	1.8
+K	Colombia	vs	D.R. Congo	1.65	4.0	5.5	1.95	1.85
+B	Bosnia & Herzegovina	vs	Qatar	1.48	4.2	8.2	1.58	2.4
+C	Switzerland	vs	Canada	2.08	3.45	3.5	1.78	2.05
+C	Morocco	vs	Haiti	1.25	6.1	15.0	2.12	1.72
+D	Scotland	vs	Brazil	10.0	5.5	1.33	2.25	1.65
+A	Czech Republic	vs	Mexico	2.95	3.25	2.5	1.74	2.08
+A	South Africa	vs	South Korea	3.45	3.25	2.25	1.68	2.18
+E	Curacao	vs	Ivory Coast	8.0	4.8	1.43	1.88	1.92
+E	Ecuador	vs	Germany	5.2	4.1	1.68	1.92	1.9
+F	Japan	vs	Sweden	2.45	3.4	2.85	1.89	1.92
+F	Tunisia	vs	Netherlands	6.5	4.4	1.52	2.2	1.68
+D	Paraguay	vs	Australia	2.1	3.4	3.6	1.79	2.03
+B	Turkey	vs	USA	2.75	3.3	2.65	1.78	2.05
+I	Norway	vs	France	4.6	3.95	1.75	2.05	1.78
+I	Senegal	vs	Iraq	1.75	3.85	4.8	1.98	1.84
+G	Cape Verde	vs	Saudi Arabia	3.05	3.15	2.55	1.62	2.3
+G	Uruguay	vs	Spain	5.8	4.3	1.6	1.93	1.88
+H	Egypt	vs	Iran	2.35	3.2	3.25	1.65	2.25
+H	New Zealand	vs	Belgium	8.5	5.0	1.38	2.15	1.7
+L	Croatia	vs	Ghana	1.95	3.4	4.1	1.68	2.2
+L	Panama	vs	England	22.0	9.0	1.15	2.2	1.67
+K	Colombia	vs	Portugal	4.1	3.8	1.85	2.0	1.82
+K	D.R. Congo	vs	Uzbekistan	2.15	3.25	3.7	1.63	2.3
+J	Algeria	vs	Austria	2.75	3.35	2.65	1.83	1.98
+J	Jordan	vs	Argentina	16.0	7.0	1.2	2.05	1.78`;
         eloDataEl.value = `GROUP,TEAM,ELO_RATING
 A,South Korea,1844
 A,Czech Republic,1731

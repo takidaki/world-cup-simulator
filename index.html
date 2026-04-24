@@ -61,6 +61,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
                     Multi-Group
                 </button>
+                <button class="tab-button" data-tab="powerRatingsTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+                    Power Ratings
+                </button>
             </nav>
         </div>
     </div>
@@ -81,7 +85,7 @@
                         </div>
                         <div>
                             <div class="card-title">Market Data Integration</div>
-                            <div class="card-subtitle">The Odds API — fetch live tournament outrights</div>
+                            <div class="card-subtitle">The Odds API — fetch live odds data</div>
                         </div>
                     </div>
                 </div>
@@ -91,13 +95,112 @@
                             <label for="oddsApiKey" class="field-label">API Key <span class="field-hint">(saved locally)</span></label>
                             <input type="password" id="oddsApiKey" class="field-input" placeholder="Paste your API key here">
                         </div>
-                        <button id="fetchOutrightsBtn" class="btn btn-primary whitespace-nowrap">
-                            Fetch Tournament Outrights
+                        <button id="fetchAllOddsBtn" class="btn btn-primary whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                            Fetch All Odds (Matches + Tournament)
                         </button>
                     </div>
-                    <div id="fetchOutrightsStatus" class="mt-2 text-xs font-medium"></div>
+                    <div id="fetchAllOddsStatus" class="mt-2 text-xs font-medium"></div>
                 </div>
             </div>
+
+            <!-- Group Mapping Admin Panel (collapsible) -->
+            <details class="collapsible-section mb-4" id="groupMappingSection">
+                <summary>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Group Mapping Admin
+                    <span class="collapsible-badge">manual team-to-group assignment</span>
+                </summary>
+                <div class="section-body">
+                    <!-- Interactive Team-to-Group Mapper -->
+                    <div id="interactiveMapperSection" class="mb-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h4 class="font-semibold text-slate-700">Interactive Team Mapper</h4>
+                                <p class="field-hint mt-1">Load official 2026 WC groups or assign manually from fetched odds data.</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="loadTeamsFromScheduleBtn" class="btn btn-success btn-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                                    Load from Official Schedule
+                                </button>
+                                <button id="loadTeamsBtn" class="btn btn-primary btn-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                                    Load from Fetched Odds
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Team Mapping Table -->
+                        <div id="teamMappingTableContainer" class="hidden">
+                            <div class="overflow-x-auto border border-slate-200 rounded-lg mb-3" style="max-height: 400px; overflow-y: auto;">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-slate-50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-slate-700 font-semibold border-b">Team Name</th>
+                                            <th class="px-4 py-2 text-left text-slate-700 font-semibold border-b">Assign to Group</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="teamMappingTableBody" class="divide-y divide-slate-200">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <button id="saveTeamMappingBtn" class="btn btn-success">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                    Save & Apply Mapping
+                                </button>
+                                <button id="resetTeamMappingBtn" class="btn btn-ghost-danger btn-sm">
+                                    Reset All
+                                </button>
+                                <span id="teamMappingSaveStatus" class="text-xs font-medium"></span>
+                            </div>
+                        </div>
+
+                        <div id="teamMapperPlaceholder" class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                            <p class="text-slate-500 text-sm">Click "Load from Official Schedule" to use the official 2026 World Cup groups, or "Load from Fetched Odds" after fetching match odds.</p>
+                        </div>
+                    </div>
+
+                    <!-- Manual CSV/JSON Input (collapsible) -->
+                    <details class="mb-3">
+                        <summary class="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900 select-none">
+                            📝 Or use manual CSV/JSON input
+                        </summary>
+                        <div class="mt-3">
+                            <div class="flex items-center gap-3 mb-3 flex-wrap">
+                                <label for="groupMappingFileInput" class="file-input-button">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                    Import CSV/JSON
+                                </label>
+                                <input type="file" id="groupMappingFileInput" class="hidden-file-input" accept=".csv,.json">
+                                <span id="groupMappingFileName" class="text-sm text-slate-500">No file selected</span>
+                                <button id="applyGroupMappingBtn" class="btn btn-success btn-sm">
+                                    Apply Mapping
+                                </button>
+                                <button id="clearGroupMappingBtn" class="btn btn-ghost-danger btn-sm">
+                                    Clear Mapping
+                                </button>
+                            </div>
+                            <label for="groupMappingData" class="field-label">Group Mapping Data</label>
+                            <textarea id="groupMappingData" rows="8" class="field-textarea" placeholder="CSV format:&#10;A,Mexico&#10;A,South Africa&#10;B,Brazil&#10;&#10;Or JSON:&#10;{&quot;A&quot;: [&quot;Mexico&quot;, &quot;South Africa&quot;], &quot;B&quot;: [&quot;Brazil&quot;]}"></textarea>
+                            <div id="groupMappingStatus" class="mt-2 text-xs font-medium"></div>
+                        </div>
+                    </details>
+
+                    <div class="field-hint-block">
+                        <p class="font-semibold mb-1">How it works:</p>
+                        <ol class="list-decimal ml-5 space-y-1 text-sm">
+                            <li><strong>Recommended:</strong> Click "Load from Official Schedule" to use official 2026 WC groups (auto-assigned!)</li>
+                            <li><strong>Alternative:</strong> Click "Fetch All Odds" then "Load from Fetched Odds" to manually assign groups</li>
+                            <li>Adjust groups using dropdown menus if needed</li>
+                            <li>Click "Save & Apply Mapping" to store your assignments and update match data</li>
+                            <li>Fetch odds to overlay betting data on official fixtures</li>
+                        </ol>
+                    </div>
+                </div>
+            </details>
 
             <!-- Input Config Card -->
             <div class="card mb-5">
@@ -118,16 +221,37 @@
                     <div class="mb-5">
                         <label for="inputMode" class="field-label">Input Mode</label>
                         <select id="inputMode" class="field-input" style="max-width:480px">
-                            <option value="odds">Match odds input (existing mode)</option>
+                            <option value="odds">Manual odds input (CSV/text)</option>
+                            <option value="api">Real-time odds from The Odds API</option>
                             <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
                             <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
                         </select>
-                        <p class="field-hint mt-1.5">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
+                        <p class="field-hint mt-1.5" id="inputModeHint">Choose how to input match data. API mode fetches live odds automatically.</p>
+                    </div>
+
+                    <!-- API Data Section -->
+                    <div id="apiDataSection" class="hidden mt-5">
+                        <div class="section-divider"><span class="section-divider-label">Live Odds from API</span></div>
+                        <div class="field-hint-block mb-3">
+                            <p class="font-semibold mb-1">How it works:</p>
+                            <ol class="list-decimal ml-5 space-y-1">
+                                <li>Ensure your API key is entered in "Market Data Integration" above</li>
+                                <li>(Optional) Configure group mapping in "Group Mapping Admin" if needed</li>
+                                <li>Click "Fetch All Odds" button at the top to get live match odds</li>
+                                <li>Match data will auto-populate - no manual input needed!</li>
+                                <li>Proceed to "Parse & Validate Data" when ready</li>
+                            </ol>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p class="text-sm text-blue-800 font-medium mb-2">✨ Live Data Mode Active</p>
+                            <p class="text-xs text-blue-700">Match odds will be fetched from The Odds API using Pinnacle odds (or average if unavailable). Tournament outrights will also be fetched automatically.</p>
+                        </div>
+                        <textarea id="matchData" rows="10" class="field-textarea mt-3" placeholder="Match data will appear here automatically after clicking 'Fetch All Odds'..." readonly></textarea>
                     </div>
 
                     <!-- Match Data Section -->
                     <div id="matchDataSection">
-                        <div class="section-divider"><span class="section-divider-label">Match Data (Odds Input)</span></div>
+                        <div class="section-divider"><span class="section-divider-label">Match Data (Manual Input)</span></div>
                         <div class="mb-3 flex items-center gap-3 flex-wrap">
                             <label for="csvFileInput" class="file-input-button">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
@@ -142,7 +266,7 @@
                             <p><strong>Style 2 (without 'vs'):</strong> GROUP, TEAM_A, TEAM_B, ODD1, ODDX, ODD2, ODD_U2.5, ODD_O2.5</p>
                             <p>Quote team names containing the delimiter. In <strong>Hybrid</strong> mode, paste only matches with known odds here.</p>
                         </div>
-                        <textarea id="matchData" rows="10" class="field-textarea" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                        <textarea id="matchDataManual" rows="10" class="field-textarea" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
                     </div>
 
                     <!-- Elo Data Section -->
@@ -583,6 +707,30 @@ B,Spain,2036</pre>
                     <div id="multiGroupViewStatus" class="text-sm text-red-500 mb-3"></div>
                     <div id="multiGroupViewContainer" class="result-panel">
                         <div id="multiGroupViewContent" class="text-sm text-slate-400">Run simulation first, then click "Show Multi-Group Overview".</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== TAB 6: Power Ratings ===== -->
+        <div id="powerRatingsTab" class="tab-content">
+            <p class="tab-description">Team power ratings calculated from market-implied attack and defense parameters.</p>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-purple">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Team Power Ratings</div>
+                            <div class="card-subtitle">Calculated from market odds after running simulation</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="powerRatingsContent" class="result-panel">
+                        <div class="text-sm text-slate-400">Run simulation first to calculate power ratings.</div>
                     </div>
                 </div>
             </div>
