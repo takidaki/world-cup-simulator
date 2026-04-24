@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test_match_filter.js:*)"
+    ]
+  }
+}

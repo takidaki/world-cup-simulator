@@ -36,7 +36,14 @@ function extractBookmakerOdds(bookmaker, homeTeam, awayTeam) {
     const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
     const totalsMarket = bookmaker.markets?.find(m => m.key === 'totals');
 
-    if (!h2hMarket || !totalsMarket) return null;
+    if (!h2hMarket || !totalsMarket) {
+        console.log('⚠️ Missing markets:', {
+            bookmaker: bookmaker.key,
+            hasH2H: !!h2hMarket,
+            hasTotals: !!totalsMarket
+        });
+        return null;
+    }
 
     const homeOdds = h2hMarket.outcomes?.find(o => o.name === homeTeam)?.price;
     const drawOdds = h2hMarket.outcomes?.find(o => o.name === 'Draw')?.price;
@@ -46,6 +53,12 @@ function extractBookmakerOdds(bookmaker, homeTeam, awayTeam) {
     const underOdds = totalsMarket.outcomes?.find(o => o.name === 'Under')?.price;
 
     if (!homeOdds || !drawOdds || !awayOdds || !overOdds || !underOdds) {
+        console.log('⚠️ Missing odds:', {
+            bookmaker: bookmaker.key,
+            lookingFor: { homeTeam, awayTeam },
+            availableTeams: h2hMarket.outcomes?.map(o => o.name),
+            homeOdds, drawOdds, awayOdds, overOdds, underOdds
+        });
         return null;
     }
 

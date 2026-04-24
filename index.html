@@ -27,6 +27,15 @@
                 </div>
             </div>
             <div class="app-header-actions">
+                <a href="admin.html" class="btn btn-ghost btn-sm mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6"/>
+                        <path d="m21 12-6-6m6 6-6 6"/>
+                        <path d="M3 12h6m6 0h6"/>
+                    </svg>
+                    Admin Panel
+                </a>
                 <span class="lang-label" id="langLabel">Language</span>
                 <button id="langToggleBtn" class="lang-toggle-btn" title="Current language: EN. Click to switch.">
                     <span class="lang-pill lang-pill-active" data-lang="en">EN</span>
@@ -97,7 +106,7 @@
                         </div>
                         <button id="fetchAllOddsBtn" class="btn btn-primary whitespace-nowrap">
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-                            Fetch All Odds (Matches + Tournament)
+                            Fetch Tournament Winner Odds
                         </button>
                     </div>
                     <div id="fetchAllOddsStatus" class="mt-2 text-xs font-medium"></div>
@@ -246,7 +255,6 @@
                             <p class="text-sm text-blue-800 font-medium mb-2">✨ Live Data Mode Active</p>
                             <p class="text-xs text-blue-700">Match odds will be fetched from The Odds API using Pinnacle odds (or average if unavailable). Tournament outrights will also be fetched automatically.</p>
                         </div>
-                        <textarea id="matchData" rows="10" class="field-textarea mt-3" placeholder="Match data will appear here automatically after clicking 'Fetch All Odds'..." readonly></textarea>
                     </div>
 
                     <!-- Match Data Section -->
@@ -266,7 +274,78 @@
                             <p><strong>Style 2 (without 'vs'):</strong> GROUP, TEAM_A, TEAM_B, ODD1, ODDX, ODD2, ODD_U2.5, ODD_O2.5</p>
                             <p>Quote team names containing the delimiter. In <strong>Hybrid</strong> mode, paste only matches with known odds here.</p>
                         </div>
-                        <textarea id="matchDataManual" rows="10" class="field-textarea" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                        <textarea id="matchData" rows="15" class="field-textarea">A;Mexico;vs;South Africa;1.56;4.33;6.4;1.91;1.91
+A;Mexico;vs;South Korea;1.97;3.65;3.75;1.85;1.95
+A;Mexico;vs;Czech Republic;2.95;3.25;2.5;1.74;2.08
+A;South Africa;vs;South Korea;3.45;3.25;2.25;1.68;2.18
+A;South Africa;vs;Czech Republic;1.92;3.48;3.65;1.75;2.05
+A;South Korea;vs;Czech Republic;2.6;3.11;2.61;1.62;2.18
+B;Canada;vs;Bosnia & Herzegovina;1.86;3.55;3.72;1.65;2.13
+B;Canada;vs;Qatar;1.45;4.4;8;1.72;2.1
+B;Canada;vs;Switzerland;2.08;3.45;3.5;1.78;2.05
+B;Bosnia & Herzegovina;vs;Qatar;1.48;4.2;8.2;1.58;2.4
+B;Bosnia & Herzegovina;vs;Switzerland;2.05;3.6;3.35;1.98;1.84
+B;Qatar;vs;Switzerland;12;5.8;1.3;2.25;1.66
+C;Brazil;vs;Morocco;1.65;3.92;6;1.89;1.93
+C;Brazil;vs;Scotland;10;5.5;1.33;2.25;1.65
+C;Brazil;vs;Haiti;1.12;9.5;25;2.2;1.65
+C;Morocco;vs;Scotland;3.05;3.25;2.45;1.78;2.02
+C;Morocco;vs;Haiti;1.25;6.1;15;2.12;1.72
+C;Scotland;vs;Haiti;7.1;5.05;1.45;2.02;1.81
+D;USA;vs;Paraguay;1.96;3.84;3.86;1.84;1.99
+D;USA;vs;Australia;2.7;3.35;2.7;1.82;2
+D;USA;vs;Turkey;2.75;3.3;2.65;1.78;2.05
+D;Paraguay;vs;Australia;2.1;3.4;3.6;1.79;2.03
+D;Paraguay;vs;Turkey;2.05;3.5;3.45;1.83;1.98
+D;Australia;vs;Turkey;3.84;3.4;1.87;1.71;2.04
+E;Germany;vs;Curacao;1.03;20;85;1.83;2
+E;Germany;vs;Netherlands;5.2;4.1;1.68;1.92;1.9
+E;Germany;vs;Japan;1.5;4.5;7;1.95;1.85
+E;Curacao;vs;Netherlands;8;4.8;1.43;1.88;1.92
+E;Curacao;vs;Japan;1.32;5.1;11;2.05;1.75
+E;Netherlands;vs;Japan;1.97;3.75;3.94;1.92;1.9
+F;Ivory Coast;vs;Ecuador;3.52;2.9;2.5;1.51;2.6
+F;Ivory Coast;vs;Sweden;2.45;3.4;2.85;1.89;1.92
+F;Ivory Coast;vs;Tunisia;3.35;3.3;2.25;1.72;2.12
+F;Ecuador;vs;Sweden;1.7;4;4.8;2.15;1.7
+F;Ecuador;vs;Tunisia;6.5;4.4;1.52;2.2;1.68
+F;Sweden;vs;Tunisia;1.9;3.37;3.74;1.63;2.16
+G;Spain;vs;Cape Verde;1.1;10.5;35;1.94;1.88
+G;Spain;vs;Belgium;5.8;4.3;1.6;1.93;1.88
+G;Spain;vs;Egypt;1.25;6;14;2.15;1.7
+G;Cape Verde;vs;Belgium;1.48;4.6;7.2;2.2;1.68
+G;Cape Verde;vs;Egypt;3.05;3.15;2.55;1.62;2.3
+G;Belgium;vs;Egypt;1.69;4.2;5.05;2.03;1.8
+H;Saudi Arabia;vs;Uruguay;5.95;4.05;1.63;1.86;1.96
+H;Saudi Arabia;vs;Iran;2.35;3.2;3.25;1.65;2.25
+H;Saudi Arabia;vs;New Zealand;8.5;5;1.38;2.15;1.7
+H;Uruguay;vs;Iran;1.45;4.5;7.8;1.98;1.82
+H;Uruguay;vs;New Zealand;3.75;3.35;2.05;1.64;2.25
+H;Iran;vs;New Zealand;1.77;3.78;5;1.77;2.07
+I;France;vs;Senegal;1.47;4.6;7.6;1.97;1.85
+I;France;vs;Iraq;1.15;8.5;19;2.35;1.58
+I;France;vs;Norway;4.6;3.95;1.75;2.05;1.78
+I;Senegal;vs;Iraq;1.75;3.85;4.8;1.98;1.84
+I;Senegal;vs;Norway;2.05;3.5;3.45;1.83;1.98
+I;Iraq;vs;Norway;7.93;5.6;1.3;2.26;1.61
+J;Argentina;vs;Algeria;1.44;4.45;9.2;1.91;1.91
+J;Argentina;vs;Austria;1.47;4.7;7.4;2.22;1.66
+J;Argentina;vs;Jordan;16;7;1.12;2.05;1.78
+J;Algeria;vs;Austria;2.75;3.35;2.65;1.83;1.98
+J;Algeria;vs;Jordan;6.5;4.6;1.5;1.9;1.9
+J;Austria;vs;Jordan;1.36;5.4;9.2;2.29;1.64
+K;Portugal;vs;D.R. Congo;1.3;4.8;8.7;2.28;1.57
+K;Portugal;vs;England;4.1;3.8;1.85;2;1.82
+K;Portugal;vs;Croatia;1.2;7.5;16;2.3;1.62
+K;D.R. Congo;vs;England;1.65;4;5.5;1.95;1.85
+K;D.R. Congo;vs;Croatia;2.15;3.25;3.7;1.63;2.3
+K;England;vs;Croatia;1.69;4.1;5.2;1.87;1.95
+L;Ghana;vs;Panama;2.01;3.84;3.7;1.81;2.02
+L;Ghana;vs;Uzbekistan;1.34;5.2;10;2.08;1.76
+L;Ghana;vs;Colombia;1.95;3.4;4.1;1.68;2.2
+L;Panama;vs;Uzbekistan;22;9;1.15;2.2;1.67
+L;Panama;vs;Colombia;7.5;4.9;1.42;2;1.8
+L;Uzbekistan;vs;Colombia;8.4;4.65;1.44;1.97;1.85</textarea>
                     </div>
 
                     <!-- Elo Data Section -->

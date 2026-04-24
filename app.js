@@ -305,42 +305,8 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 let totalRemaining = null;
 
                 try {
-                    // Step 0: Fetch Official Schedule (if not already loaded)
-                    if (!officialScheduleData) {
-                        fetchAllOddsStatusEl.innerHTML = '<span class="text-blue-500">📅 Loading official 2026 World Cup schedule...</span>';
-                        await loadOfficialSchedule();
-                        if (officialScheduleData) {
-                            statusParts.push('<span class="text-green-500 font-medium">✅ Official schedule loaded (104 matches, 12 groups)</span>');
-                        }
-                    }
-
-                    // Step 1: Fetch Match Odds
-                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>') + '<br><span class="text-blue-500">📊 Fetching match odds...</span>';
-
-                    const matchResponse = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?apiKey=${key}&regions=eu&markets=h2h,totals&oddsFormat=decimal`);
-                    if (!matchResponse.ok) {
-                        const errorText = await matchResponse.text();
-                        throw new Error(`Match odds API error: ${matchResponse.status} - ${errorText}`);
-                    }
-
-                    totalRemaining = matchResponse.headers.get('x-requests-remaining');
-                    const matchData = await matchResponse.json();
-                    lastFetchedApiData = matchData; // Store for team mapper
-                    const useSchedule = officialScheduleData !== null && !manualGroupMapping;
-                    const matchResult = processOddsData(matchData, useSchedule);
-
-                    if (matchResult.csvLines.length === 0) {
-                        statusParts.push('<span class="text-amber-500">⚠️ Match odds: No matches found with complete data</span>');
-                    } else {
-                        matchDataEl.value = matchResult.csvLines.join('\n');
-                        statusParts.push(`<span class="text-green-500 font-medium">✅ Match odds: ${matchResult.processedCount} matches fetched</span>`);
-                        if (matchResult.skippedCount > 0) {
-                            statusParts.push(`<span class="text-amber-500 text-xs ml-4">⚠️ Skipped ${matchResult.skippedCount} matches (incomplete data)</span>`);
-                        }
-                    }
-
-                    // Step 2: Fetch Tournament Outrights
-                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>') + '<br><span class="text-blue-500">🏆 Fetching tournament outrights...</span>';
+                    // Fetch Tournament Winner Odds (Outrights)
+                    fetchAllOddsStatusEl.innerHTML = '<span class="text-blue-500">🏆 Fetching tournament winner odds...</span>';
 
                     const outrightsResponse = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup_winner/odds/?apiKey=${key}&regions=eu,uk&markets=outrights`);
                     if (!outrightsResponse.ok) {
@@ -354,8 +320,12 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
 
                     // Final status
                     if (totalRemaining) {
-                        statusParts.push(`<span class="text-blue-500 text-xs mt-2 inline-block">📊 API Quota: ${totalRemaining} requests remaining (used 2 requests)</span>`);
+                        statusParts.push(`<span class="text-blue-500 text-xs mt-2 inline-block">📊 API Quota: ${totalRemaining} requests remaining (used 1 request)</span>`);
                     }
+                    fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>');
+
+                    // Inform user to upload CSV for match odds
+                    statusParts.push('<span class="text-blue-500 text-sm mt-2 inline-block">ℹ️ Upload your match odds CSV file below to load group stage matches</span>');
                     fetchAllOddsStatusEl.innerHTML = statusParts.join('<br>');
 
                 } catch (e) {
@@ -569,21 +539,21 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             // Update hint text
             if (inputModeHintEl) {
                 if (isApiMode) {
-                    inputModeHintEl.textContent = 'API mode: Click "Fetch All Odds" button at the top to get live match odds automatically.';
+                    inputModeHintEl.textContent = 'API mode is deprecated. Use Manual mode instead and click "Fetch Tournament Winner Odds" for calibration.';
                 } else if (isEloMode) {
                     inputModeHintEl.textContent = 'Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.';
                 } else if (isHybridMode) {
                     inputModeHintEl.textContent = 'Hybrid mode: Combine known match odds with Elo-generated fixtures for remaining rounds.';
                 } else {
-                    inputModeHintEl.textContent = 'Manual mode: Paste or import match odds data in CSV format.';
+                    inputModeHintEl.textContent = 'Manual mode: Match odds are pre-loaded. Edit, paste, or import your own CSV data.';
                 }
             }
 
             // Keep disabled flags in sync for form submission safety
-            matchDataEl.disabled = isEloMode || isApiMode;
-            if (csvFileInputEl) csvFileInputEl.disabled = isEloMode || isApiMode;
-            if (eloDataEl) eloDataEl.disabled = isOddsMode || isApiMode;
-            if (eloCsvFileInputEl) eloCsvFileInputEl.disabled = isOddsMode || isApiMode;
+            matchDataEl.disabled = isEloMode; // Match data always editable except in Elo mode
+            if (csvFileInputEl) csvFileInputEl.disabled = isEloMode;
+            if (eloDataEl) eloDataEl.disabled = isOddsMode;
+            if (eloCsvFileInputEl) eloCsvFileInputEl.disabled = isOddsMode;
 
             parseButtonEl.textContent = isEloMode
                 ? 'Parse Elo & Build Fixtures'

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Settings - World Cup Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50">
+    <div class="container mx-auto px-4 py-6 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-slate-800">⚙️ Admin Settings</h1>
+                    <p class="text-slate-600 mt-1">Configure and build match odds data from live sources</p>
+                </div>
+                <a href="index.html" class="btn btn-ghost">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    Back to Simulator
+                </a>
+            </div>
+        </div>
+
+        <!-- Step 1: Fetch Data from Sources -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <div class="card-header-left">
+                    <div class="card-icon card-icon-blue">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">Step 1: Fetch Data</div>
+                        <div class="card-subtitle">Load groups from Wikipedia and odds from The Odds API</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Wikipedia Schedule Fetch -->
+                <div class="mb-5">
+                    <h3 class="font-semibold text-slate-700 mb-2">Official 2026 WC Schedule (Wikipedia)</h3>
+                    <p class="text-sm text-slate-600 mb-3">Fetch the official group assignments from Wikipedia</p>
+                    <button id="fetchWikipediaBtn" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                        Fetch Wikipedia Schedule
+                    </button>
+                    <div id="wikipediaStatus" class="mt-2 text-sm"></div>
+                </div>
+
+                <div class="border-t border-slate-200 my-4"></div>
+
+                <!-- The Odds API Fetch -->
+                <div>
+                    <h3 class="font-semibold text-slate-700 mb-2">Match Odds (The Odds API)</h3>
+                    <p class="text-sm text-slate-600 mb-3">Fetch live match odds for all World Cup matches</p>
+                    <div class="flex gap-3 items-end mb-3">
+                        <div class="flex-1">
+                            <label for="oddsApiKey" class="field-label">API Key</label>
+                            <input type="password" id="oddsApiKey" class="field-input" placeholder="Enter your Odds API key">
+                        </div>
+                        <button id="fetchOddsBtn" class="btn btn-primary whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
+                            </svg>
+                            Fetch Match Odds
+                        </button>
+                    </div>
+                    <div id="oddsStatus" class="text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Match Pairing Panel -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <div class="card-header-left">
+                    <div class="card-icon card-icon-green">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">Step 2: Match & Pair Data</div>
+                        <div class="card-subtitle">Align Wikipedia groups with API match odds</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="pairingPanel" class="hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-blue-800"><strong>How to use:</strong> The system will automatically match API team names with Wikipedia group assignments. For unmatched items, use the side-by-side comparison below to manually pair matches with groups.</p>
+                    </div>
+
+                    <div class="flex gap-3 mb-4">
+                        <button id="autoPairBtn" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                <polyline points="9 22 9 12 15 12 15 22"/>
+                            </svg>
+                            Auto-Pair Matches with Groups
+                        </button>
+                    </div>
+
+                    <!-- Multi-Column Pairing Comparison -->
+                    <div id="pairingComparison" class="hidden">
+                        <!-- Header -->
+                        <div class="bg-gradient-to-r from-slate-700 to-slate-600 text-white p-4 rounded-t-xl">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="9" cy="7" r="4"/>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                    </svg>
+                                    <div>
+                                        <div class="font-bold text-lg">Groups & Matches Pairing</div>
+                                        <div class="text-xs text-slate-300">Click group, then click match to pair</div>
+                                    </div>
+                                </div>
+                                <div id="pairingStats" class="text-sm font-medium bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Groups Section (Multi-Column Grid) -->
+                        <div class="bg-gradient-to-b from-blue-50 to-white border-2 border-t-0 border-slate-300 p-4">
+                            <div class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                <span class="bg-blue-600 text-white rounded-full" style="width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">1</span>
+                                Select a Group
+                            </div>
+                            <div id="groupsColumn" class="grid grid-cols-6 gap-2">
+                                <!-- Groups A-L will be populated here in 6 columns x 2 rows -->
+                            </div>
+                        </div>
+
+                        <!-- Matches Section (Multi-Column Grid) -->
+                        <div class="bg-gradient-to-b from-green-50 to-white border-2 border-t-0 border-slate-300 p-4 rounded-b-xl">
+                            <div class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                <span class="bg-green-600 text-white rounded-full" style="width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">2</span>
+                                Select a Match to Pair
+                            </div>
+                            <div id="unmatchedColumn" class="grid grid-cols-3 gap-2">
+                                <!-- Matches will be populated here in 3 columns -->
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mt-6 flex gap-3 items-center">
+                            <button id="saveManualPairingsBtn" class="btn btn-success shadow-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                Apply Pairings & Generate CSV
+                            </button>
+                            <button id="cancelManualPairingsBtn" class="btn btn-ghost">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                                Clear Pairings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pairingPlaceholder" class="text-center py-8 text-slate-500">
+                    <svg class="mx-auto mb-3 text-slate-300" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    <p>Fetch both Wikipedia schedule and API odds to enable pairing</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2B: Add Missing Matches -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <div class="card-header-left">
+                    <div class="card-icon card-icon-amber">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="12" x2="12" y1="18" y2="12"/>
+                            <line x1="9" x2="15" y1="15" y2="15"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">Step 2B: Add Missing Matches (Optional)</div>
+                        <div class="card-subtitle">Paste CSV data for matches not found in API</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                    <p class="text-sm text-amber-800"><strong>When to use:</strong> If some matches are missing from the API or you want to add custom match data, paste it here in CSV format. The system will merge it with API data.</p>
+                </div>
+
+                <div class="mb-3">
+                    <label class="field-label">Additional Match Data (Multiple CSV Formats Supported)</label>
+                    <textarea id="additionalMatchData" rows="10" class="field-textarea font-mono text-xs" placeholder="Paste CSV data here... Supports multiple formats:&#10;&#10;Format 1 (with group): GROUP;TEAM_A;vs;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER&#10;Format 2 (no 'vs'):    GROUP;TEAM_A;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER&#10;Format 3 (tab-delim):  GROUP	TEAM_A	TEAM_B	ODD1	ODDX	ODD2	ODD_UNDER	ODD_OVER&#10;Format 4 (auto-group): TEAM_A;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER&#10;&#10;Examples:&#10;A;Mexico;vs;South Africa;1.56;4.33;6.4;1.91;1.91&#10;Mexico	South Africa	1.56	4.33	6.4	1.91	1.91"></textarea>
+                </div>
+
+                <div class="flex gap-3">
+                    <button id="mergeAdditionalDataBtn" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" x2="12" y1="3" y2="15"/>
+                        </svg>
+                        Merge with Paired Data
+                    </button>
+                    <button id="clearAdditionalDataBtn" class="btn btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+                <div id="additionalDataStatus" class="mt-2 text-sm"></div>
+            </div>
+        </div>
+
+        <!-- Step 3: Generate CSV Output -->
+        <div class="card mb-5">
+            <div class="card-header">
+                <div class="card-header-left">
+                    <div class="card-icon card-icon-indigo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" x2="8" y1="13" y2="13"/>
+                            <line x1="16" x2="8" y1="17" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="card-title">Step 3: Generate CSV</div>
+                        <div class="card-subtitle">Final merged data for the simulator</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="field-label">CSV Format Preview</label>
+                    <textarea id="csvOutput" rows="12" class="field-textarea font-mono text-xs" readonly placeholder="Paired CSV data will appear here...&#10;&#10;Format: GROUP;TEAM_A;vs;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER"></textarea>
+                </div>
+                <div class="flex gap-3">
+                    <button id="copyToClipboardBtn" class="btn btn-success" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                        </svg>
+                        Copy to Clipboard
+                    </button>
+                    <button id="downloadCsvBtn" class="btn btn-primary" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" x2="12" y1="15" y2="3"/>
+                        </svg>
+                        Download CSV
+                    </button>
+                    <button id="useInSimulatorBtn" class="btn btn-ghost" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Use in Simulator
+                    </button>
+                </div>
+                <div id="csvStatus" class="mt-2 text-sm"></div>
+            </div>
+        </div>
+
+        <!-- Debug Info -->
+        <details class="collapsible-section mb-4">
+            <summary>
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" x2="12" y1="16" y2="12"/>
+                    <line x1="12" x2="12.01" y1="8" y2="8"/>
+                </svg>
+                Debug Info
+                <span class="collapsible-badge">for developers</span>
+            </summary>
+            <div class="section-body">
+                <div class="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                    <div id="debugLog">No debug info yet. Perform actions above to see logs.</div>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <script type="module" src="admin.js"></script>
+</body>
+</html>

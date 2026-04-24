@@ -1,0 +1,13 @@
+GROUP;TEAM_A;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER
+A;Brazil;Argentina;2.1;3.2;3.5;1.9;1.8
+A;Brazil;Canada;1.3;4.5;8.0;2.0;1.7
+A;Brazil;Chile;1.5;4.0;5.5;1.95;1.75
+A;Argentina;Canada;1.4;4.2;6.5;1.95;1.75
+A;Argentina;Chile;1.6;3.8;4.8;1.9;1.8
+A;Canada;Chile;2.8;3.2;2.2;1.85;1.85
+B;France;Germany;2.0;3.3;3.4;1.9;1.8
+B;France;Spain;2.2;3.1;3.0;1.85;1.85
+B;France;Portugal;1.8;3.5;4.0;1.9;1.8
+B;Germany;Spain;2.1;3.2;3.2;1.85;1.85
+B;Germany;Portugal;1.9;3.4;3.8;1.9;1.8
+B;Spain;Portugal;2.5;3.1;2.6;1.8;1.9
