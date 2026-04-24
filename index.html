@@ -5,389 +5,590 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Football Group Betting Simulator</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-gray-100 min-h-screen p-4 md:p-8">
-    <div class="container mx-auto max-w-5xl bg-white p-6 rounded-lg shadow-xl">
-        <header class="mb-5 flex items-center justify-between flex-wrap gap-2">
-            <h1 class="text-2xl font-bold text-gray-800 tracking-tight">Football Competition Analysis Tool</h1>
-            <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400 font-medium" id="langLabel">Language</span>
-                <button id="langToggleBtn"
-                    class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition text-sm"
-                    title="Current language: EN. Click to switch.">
+<body>
+
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="app-header-inner">
+            <div class="app-brand">
+                <div class="app-brand-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+                </div>
+                <div>
+                    <div class="app-title">Football Competition Analysis</div>
+                    <div class="app-subtitle">Group Stage &amp; Knockout Betting Simulator</div>
+                </div>
+            </div>
+            <div class="app-header-actions">
+                <span class="lang-label" id="langLabel">Language</span>
+                <button id="langToggleBtn" class="lang-toggle-btn" title="Current language: EN. Click to switch.">
                     <span class="lang-pill lang-pill-active" data-lang="en">EN</span>
-                    <span class="text-gray-300 text-xs leading-none">/</span>
+                    <span class="lang-divider">/</span>
                     <span class="lang-pill lang-pill-inactive" data-lang="sr">SR</span>
                 </button>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Tab Navigation -->
-        <nav class="tab-nav">
-            <button class="tab-button active" data-tab="simulatorTab">Group Simulator</button>
-            <button class="tab-button" data-tab="lambdaViewTab">Lambdas</button>
-            <button class="tab-button" data-tab="oddsCalculatorTab">Simulated Group Odds</button>
-            <button class="tab-button" data-tab="tournamentTeamOddsTab">Tournament Team Odds</button>
-            <button class="tab-button" data-tab="multiGroupViewTab">Multi-Group View</button>
-        </nav>
+    <!-- Tab Navigation -->
+    <div class="tab-nav-wrapper">
+        <div class="tab-nav-inner">
+            <nav class="tab-nav">
+                <button class="tab-button active" data-tab="simulatorTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                    Group Simulator
+                </button>
+                <button class="tab-button" data-tab="lambdaViewTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg>
+                    Lambdas
+                </button>
+                <button class="tab-button" data-tab="oddsCalculatorTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+                    Group Odds
+                </button>
+                <button class="tab-button" data-tab="tournamentTeamOddsTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    Tournament Odds
+                </button>
+                <button class="tab-button" data-tab="multiGroupViewTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                    Multi-Group
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="app-main">
 
         <!-- ===== TAB 1: Group Simulator ===== -->
         <div id="simulatorTab" class="tab-content active">
-            <p class="text-gray-500 mb-5 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
-            
-            <!-- Global Odds API Integration (Prominent) -->
-            <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
-                <h3 class="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-                    Market Data Integration (The Odds API)
-                </h3>
-                <div class="flex flex-col sm:flex-row gap-3 items-end">
-                    <div class="flex-1 w-full">
-                        <label for="oddsApiKey" class="block text-xs font-medium text-indigo-700 mb-1">Odds API Key (saved locally):</label>
-                        <input type="password" id="oddsApiKey" class="w-full p-2.5 border border-indigo-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste your API key here">
+            <p class="tab-description">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
+
+            <!-- Market Data Card -->
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-indigo">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Market Data Integration</div>
+                            <div class="card-subtitle">The Odds API — fetch live tournament outrights</div>
+                        </div>
                     </div>
-                    <button id="fetchOutrightsBtn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">
-                        Fetch Tournament Outrights
-                    </button>
                 </div>
-                <div id="fetchOutrightsStatus" class="mt-2 text-xs font-medium"></div>
-            </div>
-
-            <!-- Input Mode -->
-            <div class="mb-5">
-                <label for="inputMode" class="block text-sm font-medium text-gray-700 mb-1">Simulation Input Mode:</label>
-                <select id="inputMode" class="w-full md:w-2/3 p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                    <option value="odds">Match odds input (existing mode)</option>
-                    <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
-                    <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
-                </select>
-                <p class="mt-1 text-xs text-gray-500">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
-            </div>
-
-            <!-- Match Data Section (visible in odds + hybrid modes) -->
-            <div id="matchDataSection" class="mb-5">
-                <div class="mb-4">
-                    <label for="csvFileInput" class="file-input-button">Import CSV File</label>
-                    <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
-                    <span id="csvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                    <p class="mt-1.5 text-xs text-gray-500">
-                        CSV Delimiters: comma, semicolon, or tab. Each row a match.<br/>
-                        Style 1 (with 'vs'): GROUP,TEAM_A_FIELD(S),vs,TEAM_B_FIELD(S),ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
-                        Style 2 (without 'vs'): GROUP,TEAM_A_FIELD,TEAM_B_FIELD,ODD1,ODDX,ODD2,ODD_U2.5,ODD_O2.5<br/>
-                        If team names contain the delimiter, quote them (e.g., "Team, Inc.").<br/>
-                        In <strong>Hybrid</strong> mode, paste only matches with known odds here.
-                    </p>
-                </div>
-                <div>
-                    <label for="matchData" class="block text-sm font-medium text-gray-700 mb-1">Match Data (Odds Input):</label>
-                    <textarea id="matchData" rows="10" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                <div class="card-body">
+                    <div class="flex flex-col sm:flex-row gap-3 items-end">
+                        <div class="flex-1 w-full">
+                            <label for="oddsApiKey" class="field-label">API Key <span class="field-hint">(saved locally)</span></label>
+                            <input type="password" id="oddsApiKey" class="field-input" placeholder="Paste your API key here">
+                        </div>
+                        <button id="fetchOutrightsBtn" class="btn btn-primary whitespace-nowrap">
+                            Fetch Tournament Outrights
+                        </button>
+                    </div>
+                    <div id="fetchOutrightsStatus" class="mt-2 text-xs font-medium"></div>
                 </div>
             </div>
 
-            <!-- Elo Data Section (visible in elo + hybrid modes) -->
-            <div id="eloSection" class="hidden mb-5">
-                <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-900">
-                    <p class="font-semibold mb-1">Elo CSV supported format</p>
-                    <p>Accepted delimiters: comma, semicolon, or tab.</p>
-                    <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional).</p>
-                    <p>Hybrid mode uses your provided odds matches, then fills missing group fixtures from Elo.</p>
-                    <p class="font-semibold mt-2 mb-1">Example rows:</p>
-                    <pre class="whitespace-pre-wrap">GROUP,TEAM,ELO
+            <!-- Input Config Card -->
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-blue">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Simulation Input</div>
+                            <div class="card-subtitle">Configure data source and input mode</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+
+                    <!-- Input Mode -->
+                    <div class="mb-5">
+                        <label for="inputMode" class="field-label">Input Mode</label>
+                        <select id="inputMode" class="field-input" style="max-width:480px">
+                            <option value="odds">Match odds input (existing mode)</option>
+                            <option value="elo">Elo ratings CSV (auto-generate group fixtures)</option>
+                            <option value="hybrid">Hybrid (known odds + Elo-generated missing rounds)</option>
+                        </select>
+                        <p class="field-hint mt-1.5">Use Elo mode when you only have team ratings by group. Expected goals are generated from Elo differences.</p>
+                    </div>
+
+                    <!-- Match Data Section -->
+                    <div id="matchDataSection">
+                        <div class="section-divider"><span class="section-divider-label">Match Data (Odds Input)</span></div>
+                        <div class="mb-3 flex items-center gap-3 flex-wrap">
+                            <label for="csvFileInput" class="file-input-button">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                Import CSV
+                            </label>
+                            <input type="file" id="csvFileInput" class="hidden-file-input" accept=".csv">
+                            <span id="csvFileName" class="text-sm text-slate-500">No file selected</span>
+                        </div>
+                        <div class="field-hint-block mb-3">
+                            <p>CSV Delimiters: comma, semicolon, or tab. Each row a match.</p>
+                            <p><strong>Style 1 (with 'vs'):</strong> GROUP, TEAM_A, vs, TEAM_B, ODD1, ODDX, ODD2, ODD_U2.5, ODD_O2.5</p>
+                            <p><strong>Style 2 (without 'vs'):</strong> GROUP, TEAM_A, TEAM_B, ODD1, ODDX, ODD2, ODD_U2.5, ODD_O2.5</p>
+                            <p>Quote team names containing the delimiter. In <strong>Hybrid</strong> mode, paste only matches with known odds here.</p>
+                        </div>
+                        <textarea id="matchData" rows="10" class="field-textarea" placeholder="Paste match data here or import from CSV. Each line: GROUP TEAM_A vs TEAM_B ODDS_1 ODDS_X ODDS_2 ODDS_UNDER_2.5 ODDS_OVER_2.5&#10;Example: A Al Ahly vs Inter Miami 3.9 3.85 1.85 1.93 1.87"></textarea>
+                    </div>
+
+                    <!-- Elo Data Section -->
+                    <div id="eloSection" class="hidden mt-5">
+                        <div class="section-divider"><span class="section-divider-label">Elo Ratings</span></div>
+                        <div class="field-hint-block mb-3">
+                            <p class="font-semibold mb-1">Elo CSV Format</p>
+                            <p>Required columns: <code>GROUP,TEAM,ELO</code> (header optional). Delimiters: comma, semicolon, tab.</p>
+                            <p>In <strong>Hybrid</strong> mode, include all teams for each group here.</p>
+                            <pre>GROUP,TEAM,ELO
 A,Germany,1942
 A,Scotland,1730
 B,Spain,2036</pre>
+                        </div>
+                        <div class="mb-3 flex items-center gap-3 flex-wrap">
+                            <label for="eloCsvFileInput" class="file-input-button">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                Import Elo CSV
+                            </label>
+                            <input type="file" id="eloCsvFileInput" class="hidden-file-input" accept=".csv">
+                            <span id="eloCsvFileName" class="text-sm text-slate-500">No file selected</span>
+                        </div>
+                        <label for="eloData" class="field-label">Elo Data</label>
+                        <textarea id="eloData" rows="8" class="field-textarea" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
+                    </div>
+
                 </div>
-                <label for="eloCsvFileInput" class="file-input-button">Import Elo CSV</label>
-                <input type="file" id="eloCsvFileInput" class="hidden-file-input" accept=".csv">
-                <span id="eloCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                <p class="mt-1.5 text-xs text-gray-500">
-                    Format: GROUP,TEAM,ELO (header optional). Delimiters: comma, semicolon, tab.<br/>
-                    In <strong>Hybrid</strong> mode, include all teams for each group here.
-                </p>
-                <label for="eloData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Elo Data:</label>
-                <textarea id="eloData" rows="8" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste Elo CSV here when using Elo mode."></textarea>
             </div>
 
-            <!-- Bracket Data Section (always collapsible) -->
-            <details class="collapsible-section" id="bracketSection">
-                <summary>Bracket Data <span class="text-xs font-normal text-gray-400 ml-1">(optional — knockout path definitions)</span></summary>
+            <!-- Bracket Data (collapsible) -->
+            <details class="collapsible-section mb-4" id="bracketSection">
+                <summary>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                    Bracket Data
+                    <span class="collapsible-badge">optional — knockout path definitions</span>
+                </summary>
                 <div class="section-body">
-                    <label for="bracketCsvFileInput" class="file-input-button">Import Bracket CSV</label>
-                    <input type="file" id="bracketCsvFileInput" class="hidden-file-input" accept=".csv">
-                    <span id="bracketCsvFileName" class="ml-2 text-sm text-gray-500">No file selected.</span>
-                    <p class="mt-1.5 text-xs text-gray-500">
-                        Use this for knockout path definitions (R32, R16, QF, SF, 3RD, FINAL).<br/>
-                        Format: ROUND,MATCH,TEAM_REF_A,vs,TEAM_REF_B (header optional).
-                    </p>
-                    <label for="bracketData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Bracket Data:</label>
-                    <textarea id="bracketData" rows="8" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste bracket rows here for knockout simulation."></textarea>
+                    <div class="mb-3 flex items-center gap-3 flex-wrap">
+                        <label for="bracketCsvFileInput" class="file-input-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            Import Bracket CSV
+                        </label>
+                        <input type="file" id="bracketCsvFileInput" class="hidden-file-input" accept=".csv">
+                        <span id="bracketCsvFileName" class="text-sm text-slate-500">No file selected</span>
+                    </div>
+                    <p class="field-hint mb-3">Format: ROUND, MATCH, TEAM_REF_A, vs, TEAM_REF_B (header optional). Use for R32, R16, QF, SF, 3RD, FINAL path definitions.</p>
+                    <label for="bracketData" class="field-label">Bracket Data</label>
+                    <textarea id="bracketData" rows="8" class="field-textarea" placeholder="Paste bracket rows here for knockout simulation."></textarea>
                 </div>
             </details>
 
-            <!-- Outrights Data Section (always collapsible) -->
-            <details class="collapsible-section" id="outrightsSection">
-                <summary>Tournament Winner Odds <span class="text-xs font-normal text-gray-400 ml-1">(JSON or CSV)</span></summary>
+            <!-- Tournament Winner Odds (collapsible) -->
+            <details class="collapsible-section mb-5" id="outrightsSection">
+                <summary>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                    Tournament Winner Odds
+                    <span class="collapsible-badge">JSON or CSV</span>
+                </summary>
                 <div class="section-body">
-                    <p class="text-xs text-gray-500 mb-2">
-                        Data fetched from API will appear here. You can also paste manual data.<br/>
-                        Format: TEAM, ODDS (e.g., <code>Brazil, 5.50</code>) or direct JSON.
-                    </p>
-                    <textarea id="outrightsData" rows="6" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono" placeholder="Tournament winner odds data..."></textarea>
+                    <p class="field-hint mb-3">Data fetched from API appears here automatically. You can also paste manually. Format: <code>TEAM, ODDS</code> (e.g., <code>Brazil, 5.50</code>) or direct JSON.</p>
+                    <textarea id="outrightsData" rows="6" class="field-textarea" placeholder="Tournament winner odds data..."></textarea>
                 </div>
             </details>
 
-            <!-- Simulation Settings -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                <div>
-                    <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">Number of Simulations:</label>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <select id="numSimulationsPreset" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                            <option value="1000">1,000 runs</option>
-                            <option value="5000">5,000 runs</option>
-                            <option value="10000" selected>10,000 runs</option>
-                            <option value="25000">25,000 runs</option>
-                            <option value="50000">50,000 runs</option>
-                            <option value="100000">100,000 runs</option>
-                            <option value="custom">Custom</option>
-                        </select>
-                        <input type="number" id="numSimulations" value="10000" min="1" step="1" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Custom run count">
+            <!-- Simulation Settings Card -->
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-navy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Simulation Settings</div>
+                            <div class="card-subtitle">Run count, tie-break rules, and correction factors</div>
+                        </div>
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">Choose a preset or enter any positive whole number.</p>
                 </div>
-                <div>
-                    <label for="tieBreakPreset" class="block text-sm font-medium text-gray-700 mb-1">Standings Tie-Break Rules:</label>
-                    <select id="tieBreakPreset" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
-                    <p id="tieBreakPresetHelp" class="mt-1 text-xs text-gray-400"></p>
-                </div>
-                <div class="md:col-span-2">
-                    <label for="advancementPreset" class="block text-sm font-medium text-gray-700 mb-1">Advancement Logic:</label>
-                    <select id="advancementPreset" class="w-full md:w-2/3 p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
-                    <p id="advancementPresetHelp" class="mt-1 text-xs text-gray-400"></p>
-                </div>
-            </div>
-
-            <!-- Dixon-Coles Low-Score Correction -->
-            <div class="mb-5 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-                <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-                    <label class="flex items-center gap-2 text-sm font-medium text-indigo-800 cursor-pointer select-none">
-                        <input type="checkbox" id="dixonColesEnabled" class="rounded border-indigo-400 text-indigo-600 focus:ring-indigo-500" onchange="document.getElementById('dixonColesRho').disabled = !this.checked">
-                        Dixon-Coles low-score correction
-                    </label>
-                    <div class="flex items-center gap-2">
-                        <label for="dixonColesRho" class="text-sm text-indigo-700 whitespace-nowrap">&#961; (rho):</label>
-                        <input type="number" id="dixonColesRho" value="-0.10" min="-0.5" max="0" step="0.01" disabled
-                               class="w-24 p-1.5 border border-indigo-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:bg-gray-100">
+                <div class="card-body">
+                    <div class="settings-grid">
+                        <div>
+                            <label for="numSimulations" class="field-label">Number of Simulations</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select id="numSimulationsPreset" class="field-input">
+                                    <option value="1000">1,000 runs</option>
+                                    <option value="5000">5,000 runs</option>
+                                    <option value="10000" selected>10,000 runs</option>
+                                    <option value="25000">25,000 runs</option>
+                                    <option value="50000">50,000 runs</option>
+                                    <option value="100000">100,000 runs</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                                <input type="number" id="numSimulations" value="10000" min="1" step="1" class="field-input" placeholder="Custom">
+                            </div>
+                            <p class="field-hint mt-1.5">Choose a preset or enter any positive whole number.</p>
+                        </div>
+                        <div>
+                            <label for="tieBreakPreset" class="field-label">Tie-Break Rules</label>
+                            <select id="tieBreakPreset" class="field-input"></select>
+                            <p id="tieBreakPresetHelp" class="field-hint mt-1.5"></p>
+                        </div>
+                        <div class="settings-grid-full">
+                            <label for="advancementPreset" class="field-label">Advancement Logic</label>
+                            <select id="advancementPreset" class="field-input" style="max-width:480px"></select>
+                            <p id="advancementPresetHelp" class="field-hint mt-1.5"></p>
+                        </div>
                     </div>
-                    <p class="text-xs text-indigo-600 w-full mt-0.5">Per-match ρ is now auto-derived from draw odds during parsing. This checkbox applies an <strong>additional</strong> global ρ offset. Negative rho increases 0-0 and 1-1 frequency. Typical override: −0.05 to −0.10.</p>
+
+                    <!-- Dixon-Coles -->
+                    <div class="dixon-coles-panel mt-4">
+                        <div class="dixon-coles-controls">
+                            <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer select-none">
+                                <input type="checkbox" id="dixonColesEnabled" class="rounded" onchange="document.getElementById('dixonColesRho').disabled = !this.checked">
+                                Dixon-Coles Low-Score Correction
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <label for="dixonColesRho" class="text-sm text-slate-600 whitespace-nowrap">&#961; (rho):</label>
+                                <input type="number" id="dixonColesRho" value="-0.10" min="-0.5" max="0" step="0.01" disabled class="field-input" style="width:6rem">
+                            </div>
+                        </div>
+                        <p class="field-hint mt-2">Per-match ρ is auto-derived from draw odds during parsing. This applies an <strong>additional</strong> global ρ offset. Negative rho increases 0-0 and 1-1 frequency. Typical override: −0.05 to −0.10.</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Scenario Locking Section (shown after parsing) -->
-            <div id="scenarioLockSection" class="hidden mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <h3 class="text-sm font-semibold text-amber-800 mb-1.5">Scenario Locking <span class="text-xs font-normal text-amber-600 ml-1">(enter an exact score before re-running simulation)</span></h3>
-                <p class="text-xs text-amber-700 mb-3">Enter a final score for any played match, then run the simulation again. Empty inputs keep the match simulated.</p>
-                <div id="scenarioLockTableContainer" class="overflow-x-auto">
-                    <table class="min-w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-amber-100">
-                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Group</th>
-                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Match</th>
-                                <th class="px-3 py-2 text-left text-amber-700 font-medium">Exact Result</th>
-                            </tr>
-                        </thead>
-                        <tbody id="scenarioLockTableBody"></tbody>
-                    </table>
+            <!-- Scenario Locking Card -->
+            <div id="scenarioLockSection" class="hidden card card-warning mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-amber">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Scenario Locking</div>
+                            <div class="card-subtitle">Fix match results before re-running simulation</div>
+                        </div>
+                    </div>
+                    <button id="clearLocksBtn" class="btn btn-ghost-warning">Clear All Locks</button>
                 </div>
-                <button id="clearLocksBtn" class="mt-3 px-3 py-1 text-xs bg-amber-200 hover:bg-amber-300 text-amber-900 font-medium rounded transition">Clear All Locks</button>
+                <div class="card-body">
+                    <p class="field-hint mb-3">Enter a final score for any played match, then run the simulation again. Empty inputs keep the match simulated.</p>
+                    <div id="scenarioLockTableContainer" class="overflow-x-auto">
+                        <table class="min-w-full text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-amber-50 border-b border-amber-200">
+                                    <th class="px-3 py-2 text-left text-amber-700 font-semibold uppercase tracking-wide text-xs">Group</th>
+                                    <th class="px-3 py-2 text-left text-amber-700 font-semibold uppercase tracking-wide text-xs">Match</th>
+                                    <th class="px-3 py-2 text-left text-amber-700 font-semibold uppercase tracking-wide text-xs">Exact Result</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scenarioLockTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex flex-col sm:flex-row items-center gap-3 mb-5">
-                <button id="parseButton" class="flex-1 w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Parse &amp; Validate Data</button>
-                <button id="runButton" class="flex-1 w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Run Simulation</button>
-                <button id="clearButton" class="font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out text-sm">Clear All</button>
+            <!-- Action Bar -->
+            <div class="action-bar mb-5">
+                <div class="action-bar-primary">
+                    <button id="parseButton" class="btn btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        Parse &amp; Validate Data
+                    </button>
+                    <button id="runButton" class="btn btn-accent" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Run Simulation
+                    </button>
+                </div>
+                <button id="clearButton" class="btn btn-ghost-danger">Clear All</button>
             </div>
 
             <div id="statusArea" class="mb-3"></div>
             <div id="loader" class="loader hidden"></div>
 
-            <!-- Export Raw Data button (shown after simulation) -->
+            <!-- Export Raw Data -->
             <div id="exportRawDataSection" class="hidden mb-4 flex items-center gap-2 flex-wrap">
-                <button id="exportRawDataBtn" class="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-1.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">⬇ Export Raw Simulation Data (CSV)</button>
-                <span class="text-xs text-gray-400">Exports per-simulation team stats for custom Excel analysis.</span>
+                <button id="exportRawDataBtn" class="btn btn-outline-slate">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    Export Raw Simulation Data (CSV)
+                </button>
+                <span class="text-xs text-slate-400">Exports per-simulation team stats for custom Excel analysis.</span>
                 <span id="exportRawDataError" class="inline-error"></span>
             </div>
 
-            <!-- Results Area (no max-height clamp) -->
-            <div id="resultsArea" class="bg-gray-50 p-4 rounded-md shadow-inner">
-                <h2 class="text-lg font-semibold text-gray-700 mb-3">Simulation Results</h2>
-                <div id="resultsContent" class="text-sm text-gray-400">Results will appear here...</div>
+            <!-- Results Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-green">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                        </div>
+                        <div class="card-title">Simulation Results</div>
+                    </div>
+                </div>
+                <div id="resultsArea" class="card-body">
+                    <div id="resultsContent" class="text-sm text-slate-400">Results will appear here after running the simulation.</div>
+                </div>
             </div>
         </div>
 
         <!-- ===== TAB 2: Lambda View ===== -->
         <div id="lambdaViewTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-1">Parsed Lambdas</h2>
-            <p class="text-gray-500 mb-5 text-sm">Inspect the implied expected goals from the current parsed input before running tournament simulations.</p>
-            <div id="lambdaViewContent" class="bg-gray-50 p-4 rounded-md shadow-inner text-sm text-gray-400">
-                Parse data first to inspect team and match lambdas.
+            <p class="tab-description">Inspect the implied expected goals from the current parsed input before running tournament simulations.</p>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-blue">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg>
+                        </div>
+                        <div class="card-title">Parsed Lambdas &amp; xG</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="lambdaViewContent" class="text-sm text-slate-400">Parse data first to inspect team and match lambdas.</div>
+                </div>
             </div>
         </div>
 
         <!-- ===== TAB 3: Simulated Group Odds ===== -->
         <div id="oddsCalculatorTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-1">Simulated Group Odds</h2>
-            <p class="text-gray-500 mb-5 text-sm">View odds derived from the simulation results. Select a group and apply a margin.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                <div>
-                    <label for="simGroupSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Group:</label>
-                    <select id="simGroupSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                        <option value="">-- Run Simulation First --</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="simBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Main Bookmaker Margin (%):</label>
-                    <input type="number" id="simBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="e.g., 5 for 5%">
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-3 mb-4 items-center">
-                <button id="showSimulatedOddsButton" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show / Refresh Market Odds</button>
-                <button id="generateGroupCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Generate Group Odds CSV</button>
-                <span id="generateGroupCsvError" class="inline-error"></span>
-            </div>
-            <div id="simulatedOddsStatus" class="text-sm text-red-500 mb-4"></div>
+            <p class="tab-description">View odds derived from the simulation results. Select a group and apply a bookmaker margin.</p>
 
-            <div id="calculatedOddsResultContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner mb-6">
-                <div id="calculatedOddsResultContent" class="text-sm text-gray-400">Select a group and click "Show / Refresh Market Odds" to see results.</div>
-            </div>
-
-            <hr class="my-6 border-gray-200">
-            <h3 class="text-base font-semibold text-gray-700 mb-3">Over/Under Line Odds</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label for="ouBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Over/Under Specific Margin (%):</label>
-                    <input type="number" id="ouBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="e.g., 5 for 5%">
+            <!-- Main Odds Card -->
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-purple">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Simulated Group Odds</div>
+                            <div class="card-subtitle">Market odds derived from simulation probabilities</div>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label for="customOULines" class="block text-sm font-medium text-gray-700 mb-1">Custom O/U Lines (comma-separated, blank = auto):</label>
-                    <input type="text" id="customOULines" placeholder="e.g. 1.5, 2.5, 3.5, 4.5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                    <p class="mt-1 text-xs text-gray-400">Overrides auto-computed lines for all O/U markets on this tab.</p>
-                </div>
-            </div>
-            <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="over-under-section">
-                    <h5>Total Group Goals O/U <span id="expectedTotalGroupGoals" class="expected-value-info"></span></h5>
-                    <div id="ouTotalGroupGoalsResult" class="text-xs"></div>
-                </div>
-                <div class="over-under-section">
-                    <h5>Points of 1st Placed Team O/U <span id="expectedFirstPlacePts" class="expected-value-info"></span></h5>
-                    <div id="ouFirstPlacePtsResult" class="text-xs"></div>
-                </div>
-                <div class="over-under-section">
-                    <h5>Points of 4th Placed Team O/U <span id="expectedFourthPlacePts" class="expected-value-info"></span></h5>
-                    <div id="ouFourthPlacePtsResult" class="text-xs"></div>
-                </div>
-                <div class="over-under-section">
-                    <h5>Goals For by 1st Placed Team O/U <span id="expectedFirstPlaceGF" class="expected-value-info"></span></h5>
-                    <div id="ouFirstPlaceGFResult" class="text-xs"></div>
-                </div>
-                <div class="over-under-section">
-                    <h5>Goals For by 4th Placed Team O/U <span id="expectedFourthPlaceGF" class="expected-value-info"></span></h5>
-                    <div id="ouFourthPlaceGFResult" class="text-xs"></div>
+                <div class="card-body">
+                    <div class="settings-grid mb-4">
+                        <div>
+                            <label for="simGroupSelect" class="field-label">Select Group</label>
+                            <select id="simGroupSelect" class="field-input">
+                                <option value="">-- Run Simulation First --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="simBookieMargin" class="field-label">Main Bookmaker Margin (%)</label>
+                            <input type="number" id="simBookieMargin" step="0.1" min="0" value="5" class="field-input" placeholder="e.g. 5">
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-3 mb-4 items-center">
+                        <button id="showSimulatedOddsButton" class="btn btn-purple">Show / Refresh Market Odds</button>
+                        <button id="generateGroupCsvButton" class="btn btn-success" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            Generate Group Odds CSV
+                        </button>
+                        <span id="generateGroupCsvError" class="inline-error"></span>
+                    </div>
+                    <div id="simulatedOddsStatus" class="text-sm text-red-500 mb-3"></div>
+                    <div id="calculatedOddsResultContainer" class="result-panel">
+                        <div id="calculatedOddsResultContent" class="text-sm text-slate-400">Select a group and click "Show / Refresh Market Odds" to see results.</div>
+                    </div>
                 </div>
             </div>
 
-            <hr class="my-6 border-gray-200">
-            <h3 class="text-base font-semibold text-gray-700 mb-3">Custom Team Prop Odds</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
-                <div>
-                    <label for="simTeamSelect" class="block text-sm font-medium text-gray-700 mb-1">Select Team (from chosen group):</label>
-                    <select id="simTeamSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" disabled>
-                        <option value="">-- Select Group First --</option>
-                    </select>
+            <!-- Over/Under Card -->
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-navy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/><path d="m6 9 6 6 6-6" transform="translate(0,6)"/></svg>
+                        </div>
+                        <div class="card-title">Over/Under Line Odds</div>
+                    </div>
                 </div>
-                <div class="flex flex-col justify-end gap-1">
-                    <button id="generateTeamCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Generate Team CSV</button>
-                    <span id="generateTeamCsvError" class="inline-error"></span>
+                <div class="card-body">
+                    <div class="settings-grid mb-4">
+                        <div>
+                            <label for="ouBookieMargin" class="field-label">O/U Specific Margin (%)</label>
+                            <input type="number" id="ouBookieMargin" step="0.1" min="0" value="5" class="field-input" placeholder="e.g. 5">
+                        </div>
+                        <div>
+                            <label for="customOULines" class="field-label">Custom O/U Lines <span class="field-hint">(comma-separated, blank = auto)</span></label>
+                            <input type="text" id="customOULines" placeholder="e.g. 1.5, 2.5, 3.5, 4.5" class="field-input">
+                        </div>
+                    </div>
+                    <div id="overUnderMarketsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="over-under-section">
+                            <h5>Total Group Goals O/U <span id="expectedTotalGroupGoals" class="expected-value-info"></span></h5>
+                            <div id="ouTotalGroupGoalsResult" class="text-xs"></div>
+                        </div>
+                        <div class="over-under-section">
+                            <h5>Points of 1st Placed Team O/U <span id="expectedFirstPlacePts" class="expected-value-info"></span></h5>
+                            <div id="ouFirstPlacePtsResult" class="text-xs"></div>
+                        </div>
+                        <div class="over-under-section">
+                            <h5>Points of 4th Placed Team O/U <span id="expectedFourthPlacePts" class="expected-value-info"></span></h5>
+                            <div id="ouFourthPlacePtsResult" class="text-xs"></div>
+                        </div>
+                        <div class="over-under-section">
+                            <h5>Goals For by 1st Placed Team O/U <span id="expectedFirstPlaceGF" class="expected-value-info"></span></h5>
+                            <div id="ouFirstPlaceGFResult" class="text-xs"></div>
+                        </div>
+                        <div class="over-under-section">
+                            <h5>Goals For by 4th Placed Team O/U <span id="expectedFourthPlaceGF" class="expected-value-info"></span></h5>
+                            <div id="ouFourthPlaceGFResult" class="text-xs"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div id="customProbInputsContainer" class="hidden">
-                <div class="flex flex-wrap items-center gap-2 text-sm mb-4 p-3 bg-indigo-50 rounded-md">
-                    <span class="font-medium">Calculate P(</span>
-                    <select id="simCustomStatType" class="p-1.5 border rounded text-xs">
-                        <option value="ptsSims">Points</option>
-                        <option value="winsSims">Wins</option>
-                        <option value="gfSims">GF</option>
-                        <option value="gaSims">GA</option>
-                    </select>
-                    <select id="simCustomOperator" class="p-1.5 border rounded text-xs">
-                        <option value=">">&gt;</option>
-                        <option value=">=">&ge;</option>
-                        <option value="<">&lt;</option>
-                        <option value="<=">&le;</option>
-                        <option value="==">==</option>
-                        <option value="between">Between</option>
-                    </select>
-                    <input type="number" step="0.1" id="simCustomValue1" class="p-1.5 border rounded w-20 text-xs" placeholder="Value 1">
-                    <input type="number" step="0.1" id="simCustomValue2" class="p-1.5 border rounded w-20 text-xs hidden" placeholder="Value 2">
-                    <span class="font-medium">)</span>
-                    <button id="calculateCustomProbAndOddButton" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-semibold">Calc Prop Odd</button>
+
+            <!-- Custom Team Props Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-teal">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+                        </div>
+                        <div class="card-title">Custom Team Prop Odds</div>
+                    </div>
                 </div>
-                <div id="customProbAndOddResultArea" class="text-sm p-3 bg-gray-100 rounded-md text-gray-400">Custom prop odds will appear here...</div>
+                <div class="card-body">
+                    <div class="settings-grid mb-4">
+                        <div>
+                            <label for="simTeamSelect" class="field-label">Select Team <span class="field-hint">(from chosen group)</span></label>
+                            <select id="simTeamSelect" class="field-input" disabled>
+                                <option value="">-- Select Group First --</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <div class="w-full">
+                                <button id="generateTeamCsvButton" class="btn btn-success w-full" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                    Generate Team CSV
+                                </button>
+                                <span id="generateTeamCsvError" class="inline-error mt-1"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="customProbInputsContainer" class="hidden">
+                        <div class="prob-calc-bar mb-4">
+                            <span class="font-semibold text-slate-700">Calculate P(</span>
+                            <select id="simCustomStatType" class="field-input-xs">
+                                <option value="ptsSims">Points</option>
+                                <option value="winsSims">Wins</option>
+                                <option value="gfSims">GF</option>
+                                <option value="gaSims">GA</option>
+                            </select>
+                            <select id="simCustomOperator" class="field-input-xs">
+                                <option value=">">&gt;</option>
+                                <option value=">=">&ge;</option>
+                                <option value="<">&lt;</option>
+                                <option value="<=">&le;</option>
+                                <option value="==">==</option>
+                                <option value="between">Between</option>
+                            </select>
+                            <input type="number" step="0.1" id="simCustomValue1" class="field-input-xs" style="width:5rem" placeholder="Value 1">
+                            <input type="number" step="0.1" id="simCustomValue2" class="field-input-xs hidden" style="width:5rem" placeholder="Value 2">
+                            <span class="font-semibold text-slate-700">)</span>
+                            <button id="calculateCustomProbAndOddButton" class="btn btn-teal btn-sm">Calc Prop Odd</button>
+                        </div>
+                        <div id="customProbAndOddResultArea" class="result-panel text-sm text-slate-400">Custom prop odds will appear here...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- ===== TAB 4: Tournament Team Odds ===== -->
         <div id="tournamentTeamOddsTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-1">Tournament Team Odds</h2>
-            <p class="text-gray-500 mb-5 text-sm">Tournament winner odds across all teams (with total margin) plus optional team-level knockout and totals markets.</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                    <label for="tournamentTeamSelect" class="block text-sm font-medium text-gray-700 mb-1">Team:</label>
-                    <select id="tournamentTeamSelect" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                        <option value="">-- Run Simulation First --</option>
-                    </select>
+            <p class="tab-description">Tournament winner odds across all teams (with total margin) plus optional team-level knockout and totals markets.</p>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-purple">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Tournament Team Odds</div>
+                            <div class="card-subtitle">Winner market and team-level knockout markets</div>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label for="tournamentBookieMargin" class="block text-sm font-medium text-gray-700 mb-1">Bookmaker Margin (%):</label>
-                    <input type="number" id="tournamentBookieMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                <div class="card-body">
+                    <div class="settings-grid mb-4">
+                        <div>
+                            <label for="tournamentTeamSelect" class="field-label">Team</label>
+                            <select id="tournamentTeamSelect" class="field-input">
+                                <option value="">-- Run Simulation First --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="tournamentBookieMargin" class="field-label">Bookmaker Margin (%)</label>
+                            <input type="number" id="tournamentBookieMargin" step="0.1" min="0" value="5" class="field-input">
+                        </div>
+                        <div class="flex items-end">
+                            <button id="showTournamentTeamOddsButton" class="btn btn-purple w-full">Show Tournament Odds</button>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-3 mb-4 items-center">
+                        <button id="generateTournamentTeamCsvButton" class="btn btn-success" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            Generate Team CSV
+                        </button>
+                        <span id="generateTournamentTeamCsvError" class="inline-error"></span>
+                    </div>
+                    <div id="tournamentTeamOddsStatus" class="text-sm text-red-500 mb-3"></div>
+                    <div id="tournamentTeamOddsResultContainer" class="result-panel">
+                        <div id="tournamentTeamOddsResultContent" class="text-sm text-slate-400">Click "Show Tournament Odds" to view winner market odds and margin.</div>
+                    </div>
                 </div>
-                <div class="flex items-end">
-                    <button id="showTournamentTeamOddsButton" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show Tournament Odds</button>
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-3 mb-4 items-center">
-                <button id="generateTournamentTeamCsvButton" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm" disabled>Generate Team CSV</button>
-                <span id="generateTournamentTeamCsvError" class="inline-error"></span>
-            </div>
-            <div id="tournamentTeamOddsStatus" class="text-sm text-red-500 mb-4"></div>
-            <div id="tournamentTeamOddsResultContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner">
-                <div id="tournamentTeamOddsResultContent" class="text-sm text-gray-400">Click "Show Tournament Odds" to view winner market odds and margin.</div>
             </div>
         </div>
 
         <!-- ===== TAB 5: Multi-Group View ===== -->
         <div id="multiGroupViewTab" class="tab-content">
-            <h2 class="text-xl font-semibold text-gray-700 mb-1">Multi-Group Tournament View</h2>
-            <p class="text-gray-500 mb-5 text-sm">All groups at a glance — advancement probabilities for every team across the tournament simultaneously.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label for="multiGroupMargin" class="block text-sm font-medium text-gray-700 mb-1">Bookmaker Margin (%):</label>
-                    <input type="number" id="multiGroupMargin" step="0.1" min="0" value="5" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+            <p class="tab-description">All groups at a glance — advancement probabilities for every team across the tournament simultaneously.</p>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-header-left">
+                        <div class="card-icon card-icon-navy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                        </div>
+                        <div>
+                            <div class="card-title">Multi-Group Tournament Overview</div>
+                            <div class="card-subtitle">All-groups advancement probabilities at a glance</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-end">
-                    <button id="showMultiGroupViewBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2.5 px-4 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">Show Multi-Group Overview</button>
+                <div class="card-body">
+                    <div class="settings-grid mb-4">
+                        <div>
+                            <label for="multiGroupMargin" class="field-label">Bookmaker Margin (%)</label>
+                            <input type="number" id="multiGroupMargin" step="0.1" min="0" value="5" class="field-input">
+                        </div>
+                        <div class="flex items-end">
+                            <button id="showMultiGroupViewBtn" class="btn btn-primary w-full">Show Multi-Group Overview</button>
+                        </div>
+                    </div>
+                    <div id="multiGroupViewStatus" class="text-sm text-red-500 mb-3"></div>
+                    <div id="multiGroupViewContainer" class="result-panel">
+                        <div id="multiGroupViewContent" class="text-sm text-slate-400">Run simulation first, then click "Show Multi-Group Overview".</div>
+                    </div>
                 </div>
-            </div>
-            <div id="multiGroupViewStatus" class="text-sm text-red-500 mb-4"></div>
-            <div id="multiGroupViewContainer" class="mt-2 p-2 bg-gray-50 rounded-md shadow-inner">
-                <div id="multiGroupViewContent" class="text-sm text-gray-400">Run simulation first, then click "Show Multi-Group Overview".</div>
             </div>
         </div>
-    </div>
+
+    </main>
 
     <script type="module" src="app.js"></script>
 </body>
