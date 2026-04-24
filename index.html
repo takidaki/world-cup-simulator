@@ -37,6 +37,24 @@
         <!-- ===== TAB 1: Group Simulator ===== -->
         <div id="simulatorTab" class="tab-content active">
             <p class="text-gray-500 mb-5 text-sm">Enter match odds to simulate group outcomes and analyze probabilities. Lambdas are derived using an iterative xG calculation based on O/U and Home/Away odds.</p>
+            
+            <!-- Global Odds API Integration (Prominent) -->
+            <div class="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                <h3 class="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                    Market Data Integration (The Odds API)
+                </h3>
+                <div class="flex flex-col sm:flex-row gap-3 items-end">
+                    <div class="flex-1 w-full">
+                        <label for="oddsApiKey" class="block text-xs font-medium text-indigo-700 mb-1">Odds API Key (saved locally):</label>
+                        <input type="password" id="oddsApiKey" class="w-full p-2.5 border border-indigo-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste your API key here">
+                    </div>
+                    <button id="fetchOutrightsBtn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-md shadow-sm transition duration-150 ease-in-out text-sm">
+                        Fetch Tournament Outrights
+                    </button>
+                </div>
+                <div id="fetchOutrightsStatus" class="mt-2 text-xs font-medium"></div>
+            </div>
 
             <!-- Input Mode -->
             <div class="mb-5">
@@ -106,6 +124,18 @@ B,Spain,2036</pre>
                     </p>
                     <label for="bracketData" class="block text-sm font-medium text-gray-700 mb-1 mt-3">Bracket Data:</label>
                     <textarea id="bracketData" rows="8" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm" placeholder="Paste bracket rows here for knockout simulation."></textarea>
+                </div>
+            </details>
+
+            <!-- Outrights Data Section (always collapsible) -->
+            <details class="collapsible-section" id="outrightsSection">
+                <summary>Tournament Winner Odds <span class="text-xs font-normal text-gray-400 ml-1">(JSON or CSV)</span></summary>
+                <div class="section-body">
+                    <p class="text-xs text-gray-500 mb-2">
+                        Data fetched from API will appear here. You can also paste manual data.<br/>
+                        Format: TEAM, ODDS (e.g., <code>Brazil, 5.50</code>) or direct JSON.
+                    </p>
+                    <textarea id="outrightsData" rows="6" class="w-full p-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono" placeholder="Tournament winner odds data..."></textarea>
                 </div>
             </details>
 

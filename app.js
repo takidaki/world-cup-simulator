@@ -6,7 +6,7 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         initializeTabSwitching();
 
 // --- Global Variables ---
-        let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, simulationAggStats = {}, currentNumSims = 0;
+        let parsedMatches = [], parsedBracketMatches = [], teamEloRatings = {}, allTeams = new Set(), groupedMatches = {}, groupTeamNames = {}, teamMarketRatings = {}, targetOutrightProbs = {}, simulationAggStats = {}, currentNumSims = 0;
         let lockedScenarios = {}; // key: "team1||team2", value: { g1, g2 }
         let currentDCRho = 0;
         let currentLanguage = 'en';
@@ -74,6 +74,8 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
         const eloDataEl = document.getElementById('eloData'), inputModeEl = document.getElementById('inputMode');
         const bracketCsvFileInputEl = document.getElementById('bracketCsvFileInput'), bracketCsvFileNameEl = document.getElementById('bracketCsvFileName');
         const bracketDataEl = document.getElementById('bracketData');
+        const outrightsDataEl = document.getElementById('outrightsData'), oddsApiKeyEl = document.getElementById('oddsApiKey');
+        const fetchOutrightsBtnEl = document.getElementById('fetchOutrightsBtn'), fetchOutrightsStatusEl = document.getElementById('fetchOutrightsStatus');
         const simGroupSelectEl = document.getElementById('simGroupSelect'), simBookieMarginEl = document.getElementById('simBookieMargin');
         const showSimulatedOddsButtonEl = document.getElementById('showSimulatedOddsButton');
         const calculatedOddsResultContentEl = document.getElementById('calculatedOddsResultContent'), simulatedOddsStatusEl = document.getElementById('simulatedOddsStatus');
@@ -133,6 +135,37 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
 
         numSimulationsEl.addEventListener('input', syncSimulationPresetFromInput);
         syncSimulationPresetFromInput();
+
+        // --- Odds API Logic ---
+        if (oddsApiKeyEl) {
+            oddsApiKeyEl.value = localStorage.getItem('odds_api_key') || '';
+            oddsApiKeyEl.addEventListener('input', () => localStorage.setItem('odds_api_key', oddsApiKeyEl.value));
+        }
+
+        if (fetchOutrightsBtnEl) {
+            fetchOutrightsBtnEl.addEventListener('click', async () => {
+                const key = oddsApiKeyEl.value.trim();
+                if (!key) {
+                    fetchOutrightsStatusEl.innerHTML = '<span class="text-red-500">Please enter an API key first.</span>';
+                    return;
+                }
+                fetchOutrightsBtnEl.disabled = true;
+                fetchOutrightsBtnEl.textContent = 'Fetching...';
+                fetchOutrightsStatusEl.innerHTML = '<span class="text-blue-500">Contacting The Odds API...</span>';
+                try {
+                    const response = await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup_winner/odds/?apiKey=${key}&regions=eu,uk&markets=outrights`);
+                    if (!response.ok) throw new Error(`API error: ${response.status} ${response.statusText}`);
+                    const data = await response.json();
+                    outrightsDataEl.value = JSON.stringify(data, null, 2);
+                    fetchOutrightsStatusEl.innerHTML = '<span class="text-green-500 font-medium">Successfully fetched outright odds!</span>';
+                } catch (e) {
+                    fetchOutrightsStatusEl.innerHTML = `<span class="text-red-500 font-medium">Fetch failed: ${e.message}</span>`;
+                } finally {
+                    fetchOutrightsBtnEl.disabled = false;
+                    fetchOutrightsBtnEl.textContent = 'Fetch Odds';
+                }
+            });
+        }
 
         // --- Status Bar Helper ---
         const _STATUS_ICONS = {
@@ -1104,65 +1137,258 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
             return { errors, warnings, eloMap };
         }
 
-        function getKnockoutLambdasFromElo(teamA, teamB) {
-            const eloA = teamEloRatings[teamA] ?? 1500;
-            const eloB = teamEloRatings[teamB] ?? 1500;
-            const eloDiff = eloA - eloB;
-            const diffAbs = Math.abs(eloA - eloB);
-            const pANoDraw = eloProbNoDraw(eloA, eloB);
-            const pDraw = clamp(0.22 + 0.10 * Math.exp(-diffAbs / 260), 0.18, 0.33);
-            const expectedStrengthA = pANoDraw + 0.5 * pDraw;
+        function deriveTeamRatingsFromLambdas() {
+            teamMarketRatings = {};
+            if (parsedMatches.length === 0) return;
 
-            // Bayesian prior for neutral-site knockout scoring.
-            // We start from a cautious baseline and let Elo contribute matchup-specific evidence.
-            const priorTotalGoals = 2.35;
-            const priorShareA = 0.5;
-            const priorWeight = 8;
+            let totalGoals = 0;
+            let totalMatches = 0;
+            parsedMatches.forEach(m => {
+                totalGoals += m.lambda1 + m.lambda2;
+                totalMatches++;
+            });
+            const avgGoals = totalMatches > 0 ? (totalGoals / totalMatches) / 2 : 1.3;
 
-            // Elo-derived evidence:
-            // 1) stronger mismatches tend to open total goals slightly
-            // 2) win strength tilts the goal share away from 50/50
-            const evidenceTotalGoals = 2.20 + Math.min(0.45, diffAbs / 700);
-            const shareTilt = (expectedStrengthA - 0.5) * 1.15;
-            const evidenceShareA = clamp(0.5 + shareTilt, 0.20, 0.80);
-            const evidenceWeight = 2 + Math.min(6, diffAbs / 60);
+            allTeams.forEach(team => {
+                teamMarketRatings[team] = { attack: 1.0, defense: 1.0, games: 0, sumGF: 0, sumGA: 0, opponents: [] };
+            });
 
-            const posteriorTotalGoals =
-                ((priorTotalGoals * priorWeight) + (evidenceTotalGoals * evidenceWeight)) /
-                (priorWeight + evidenceWeight);
-            const posteriorShareA =
-                ((priorShareA * priorWeight) + (evidenceShareA * evidenceWeight)) /
-                (priorWeight + evidenceWeight);
+            parsedMatches.forEach(m => {
+                teamMarketRatings[m.team1].games++;
+                teamMarketRatings[m.team1].sumGF += m.lambda1;
+                teamMarketRatings[m.team1].sumGA += m.lambda2;
+                teamMarketRatings[m.team1].opponents.push(m.team2);
 
-            // A small final Elo supremacy nudge keeps elite-vs-weak pairings from being too conservative
-            // after the Bayesian shrinkage, while preserving realistic floors for both teams.
-            const deltaAdjustment = clamp(eloDiff / 1200, -0.22, 0.22);
-            const lambdaA = Math.max(0.05, (posteriorTotalGoals * posteriorShareA) + deltaAdjustment);
-            const lambdaB = Math.max(0.05, posteriorTotalGoals - lambdaA);
+                teamMarketRatings[m.team2].games++;
+                teamMarketRatings[m.team2].sumGF += m.lambda2;
+                teamMarketRatings[m.team2].sumGA += m.lambda1;
+                teamMarketRatings[m.team2].opponents.push(m.team1);
+            });
+
+            for (let iter = 0; iter < 15; iter++) {
+                let nextRatings = JSON.parse(JSON.stringify(teamMarketRatings));
+                
+                allTeams.forEach(team => {
+                    const data = teamMarketRatings[team];
+                    if (data.games === 0) return;
+                    
+                    let expGF_denom = 0, expGA_denom = 0;
+                    data.opponents.forEach(opp => {
+                        expGF_denom += avgGoals * teamMarketRatings[opp].defense;
+                        expGA_denom += avgGoals * teamMarketRatings[opp].attack;
+                    });
+
+                    nextRatings[team].attack = expGF_denom > 0 ? (data.sumGF / expGF_denom) : 1.0;
+                    nextRatings[team].defense = expGA_denom > 0 ? (data.sumGA / expGA_denom) : 1.0;
+                });
+
+                let sumAtt = 0, sumDef = 0;
+                allTeams.forEach(team => { sumAtt += nextRatings[team].attack; sumDef += nextRatings[team].defense; });
+                const n = allTeams.size || 1;
+                
+                allTeams.forEach(team => {
+                    nextRatings[team].attack /= (sumAtt / n);
+                    nextRatings[team].defense /= (sumDef / n);
+                });
+                teamMarketRatings = nextRatings;
+            }
+            teamMarketRatings._avgGoals = avgGoals;
+        }
+
+        function parseOutrightsData() {
+            targetOutrightProbs = {};
+            const raw = outrightsDataEl?.value?.trim();
+            if (!raw) return { errors: [], warnings: [] };
+
+            let errors = [];
+            let warnings = [];
+
+            try {
+                // Try JSON parsing first (Odds API format)
+                if (raw.startsWith('[') || raw.startsWith('{')) {
+                    const data = JSON.parse(raw);
+                    const events = Array.isArray(data) ? data : [data];
+                    
+                    events.forEach(event => {
+                        event.bookmakers?.forEach(bookie => {
+                            bookie.markets?.forEach(market => {
+                                if (market.key === 'outrights') {
+                                    market.outcomes.forEach(outcome => {
+                                        const team = canonicalizeTeamName(outcome.name);
+                                        if (!targetOutrightProbs[team]) targetOutrightProbs[team] = [];
+                                        targetOutrightProbs[team].push(1 / outcome.price);
+                                    });
+                                }
+                            });
+                        });
+                    });
+
+                    // Average and normalize probabilities
+                    let sumProb = 0;
+                    Object.keys(targetOutrightProbs).forEach(team => {
+                        const probs = targetOutrightProbs[team];
+                        const avgProb = probs.reduce((a, b) => a + b, 0) / probs.length;
+                        targetOutrightProbs[team] = avgProb;
+                        sumProb += avgProb;
+                    });
+                    
+                    if (sumProb > 0) {
+                        Object.keys(targetOutrightProbs).forEach(team => {
+                            targetOutrightProbs[team] /= sumProb;
+                        });
+                    }
+                } else {
+                    // CSV format: Team, Odds
+                    const lines = raw.split(/\r?\n/);
+                    let sumProb = 0;
+                    lines.forEach((line, index) => {
+                        const parts = line.split(',').map(p => p.trim());
+                        if (parts.length >= 2) {
+                            const team = canonicalizeTeamName(parts[0]);
+                            const odds = parseFloat(parts[1]);
+                            if (!isNaN(odds) && odds > 1) {
+                                targetOutrightProbs[team] = 1 / odds;
+                                sumProb += 1 / odds;
+                            }
+                        }
+                    });
+                    if (sumProb > 0) {
+                        Object.keys(targetOutrightProbs).forEach(team => {
+                            targetOutrightProbs[team] /= sumProb;
+                        });
+                    }
+                }
+            } catch (e) {
+                errors.push(`Error parsing outrights: ${e.message}`);
+            }
+
+            return { errors, warnings };
+        }
+
+        function calibrateRatingsToOutrights() {
+            if (Object.keys(targetOutrightProbs).length === 0) return;
+            
+            // P(win) is roughly proportional to Strength^k. For a 32-team tournament, k ~ 4.
+            const k = 4.0; 
+            
+            let currentImpliedProbs = {};
+            let sumCurrentProbs = 0;
+            
+            allTeams.forEach(team => {
+                if (teamMarketRatings[team]) {
+                    const str = teamMarketRatings[team].attack / teamMarketRatings[team].defense;
+                    const p = Math.pow(str, k);
+                    currentImpliedProbs[team] = p;
+                    sumCurrentProbs += p;
+                }
+            });
+            
+            if (sumCurrentProbs > 0) {
+                allTeams.forEach(team => {
+                    currentImpliedProbs[team] /= sumCurrentProbs;
+                    
+                    const targetP = targetOutrightProbs[team] || 0.001;
+                    const currentP = currentImpliedProbs[team] || 0.001;
+                    
+                    // adjust strength so that newP ≈ targetP.
+                    const adjustmentRatio = Math.pow(targetP / currentP, 1/k);
+                    
+                    // Dampen the adjustment to not entirely override group stage calibration
+                    const dampen = 0.8;
+                    const finalMultiplier = 1.0 + (adjustmentRatio - 1.0) * dampen;
+                    const safeMultiplier = Math.max(0.6, Math.min(1.6, finalMultiplier));
+                    
+                    if (teamMarketRatings[team]) {
+                        teamMarketRatings[team].attack *= Math.sqrt(safeMultiplier);
+                        teamMarketRatings[team].defense /= Math.sqrt(safeMultiplier);
+                    }
+                });
+            }
+        }
+
+        function getKnockoutLambdas(teamA, teamB) {
+            let lambdaA = 1.3;
+            let lambdaB = 1.3;
+            let eloA = teamEloRatings[teamA] ?? 1500;
+            let eloB = teamEloRatings[teamB] ?? 1500;
+
+            if (teamMarketRatings[teamA]?.games > 0 && teamMarketRatings[teamB]?.games > 0) {
+                const avgG = teamMarketRatings._avgGoals;
+                // Neutral venue calculation using Poisson model:
+                lambdaA = Math.max(0.05, avgG * teamMarketRatings[teamA].attack * teamMarketRatings[teamB].defense);
+                lambdaB = Math.max(0.05, avgG * teamMarketRatings[teamB].attack * teamMarketRatings[teamA].defense);
+            } else {
+                // Fallback to Elo logic exactly as before
+                const eloDiff = eloA - eloB;
+                const diffAbs = Math.abs(eloA - eloB);
+                const pANoDraw = eloProbNoDraw(eloA, eloB);
+                const pDraw = clamp(0.22 + 0.10 * Math.exp(-diffAbs / 260), 0.18, 0.33);
+                const expectedStrengthA = pANoDraw + 0.5 * pDraw;
+
+                const priorTotalGoals = 2.35;
+                const priorShareA = 0.5;
+                const priorWeight = 8;
+                const evidenceTotalGoals = 2.20 + Math.min(0.45, diffAbs / 700);
+                const shareTilt = (expectedStrengthA - 0.5) * 1.15;
+                const evidenceShareA = clamp(0.5 + shareTilt, 0.20, 0.80);
+                const evidenceWeight = 2 + Math.min(6, diffAbs / 60);
+
+                const posteriorTotalGoals = ((priorTotalGoals * priorWeight) + (evidenceTotalGoals * evidenceWeight)) / (priorWeight + evidenceWeight);
+                const posteriorShareA = ((priorShareA * priorWeight) + (evidenceShareA * evidenceWeight)) / (priorWeight + evidenceWeight);
+                const deltaAdjustment = clamp(eloDiff / 1200, -0.22, 0.22);
+                
+                lambdaA = Math.max(0.05, (posteriorTotalGoals * posteriorShareA) + deltaAdjustment);
+                lambdaB = Math.max(0.05, posteriorTotalGoals - lambdaA);
+            }
 
             return { lambdaA, lambdaB, eloA, eloB };
         }
 
         function simulateKnockoutMatch(teamA, teamB) {
-            const { lambdaA, lambdaB } = getKnockoutLambdasFromElo(teamA, teamB);
+            const { lambdaA, lambdaB, eloA, eloB } = getKnockoutLambdas(teamA, teamB);
+            
+            // Dynamic knockout rho: tighter matches (low lambda difference) get more negative rho
+            const supremacy = Math.abs(lambdaA - lambdaB);
+            let matchRho = Math.max(-0.25, Math.min(0, -0.15 + (supremacy * 0.08)));
+            const effectiveRho = Math.max(-0.4, Math.min(matchRho + currentDCRho, 0.15));
+
             let gA90, gB90;
-            if (currentDCRho !== 0) {
-                [gA90, gB90] = sampleDixonColes(buildDixonColesCDF(lambdaA, lambdaB, currentDCRho));
-            } else {
-                gA90 = poissonRandom(lambdaA);
-                gB90 = poissonRandom(lambdaB);
-            }
+            [gA90, gB90] = sampleDixonColes(buildDixonColesCDF(lambdaA, lambdaB, effectiveRho));
+            
             if (gA90 !== gB90) {
                 return { winner: gA90 > gB90 ? teamA : teamB, loser: gA90 > gB90 ? teamB : teamA, goalsA: gA90, goalsB: gB90 };
             }
-            const gAET = poissonRandom(lambdaA / 3);
-            const gBET = poissonRandom(lambdaB / 3);
+
+            // Fatigue-Adjusted Extra Time Model (~30 mins, but scaled down 20% due to fatigue/caution)
+            const etFatigueFactor = 0.8;
+            const etLambdaA = (lambdaA / 3) * etFatigueFactor;
+            const etLambdaB = (lambdaB / 3) * etFatigueFactor;
+            
+            // Dynamic Extra Time rho (more caution -> even more negative rho)
+            const etRho = Math.max(-0.3, effectiveRho - 0.05);
+            let gAET, gBET;
+            [gAET, gBET] = sampleDixonColes(buildDixonColesCDF(etLambdaA, etLambdaB, etRho));
+
             const finalGoalsA = gA90 + gAET;
             const finalGoalsB = gB90 + gBET;
             if (gAET !== gBET) {
                 return { winner: gAET > gBET ? teamA : teamB, loser: gAET > gBET ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
             }
-            const aWinsPens = Math.random() < 0.5;
+
+            // Penalty Shootout based on team strengths
+            // Calculate win probability from market rating or Elo
+            let pAWinsPens = 0.5;
+            if (teamMarketRatings[teamA]?.games > 0 && teamMarketRatings[teamB]?.games > 0) {
+                // Use overall rating (attack/defense) difference. Small edge for better team.
+                const ratingA = teamMarketRatings[teamA].attack / teamMarketRatings[teamA].defense;
+                const ratingB = teamMarketRatings[teamB].attack / teamMarketRatings[teamB].defense;
+                const diff = (ratingA - ratingB); // Usually between -1.5 and 1.5
+                pAWinsPens = Math.max(0.35, Math.min(0.65, 0.5 + (diff * 0.05)));
+            } else {
+                pAWinsPens = Math.max(0.35, Math.min(0.65, 0.5 + ((eloA - eloB) / 2000)));
+            }
+            
+            const aWinsPens = Math.random() < pAWinsPens;
             return { winner: aWinsPens ? teamA : teamB, loser: aWinsPens ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
         }
 
@@ -1327,6 +1553,19 @@ import { initializeTabSwitching } from './modules/uiTabs.js';
                 runButtonEl.disabled = true;
                 renderLambdaView();
             } else {
+                const outrightsParsed = parseOutrightsData();
+                if (outrightsParsed.errors.length > 0) {
+                    renderStatus('error', `Parse failed with outrights errors`, { items: outrightsParsed.errors, warnings });
+                    runButtonEl.disabled = true;
+                    return;
+                }
+                if (outrightsParsed.warnings.length > 0) {
+                    warnings.push(...outrightsParsed.warnings);
+                }
+
+                deriveTeamRatingsFromLambdas(); // Process the group odds to get team attack/defense ratings
+                calibrateRatingsToOutrights(); // Tweak ratings if outrights exist
+
                 const modeLabel = mode === 'elo' ? 'Elo-generated fixtures' : (mode === 'hybrid' ? 'hybrid (odds + Elo fill)' : 'odds input');
                 renderStatus('success', `Parsed ${parsedMatches.length} matches, ${Object.keys(groupedMatches).length} groups, ${allTeams.size} teams (${modeLabel}).`, {
                     detail: `Bracket rows: ${parsedBracketMatches.length}. Elo ratings: ${Object.keys(teamEloRatings).length} teams.`,
