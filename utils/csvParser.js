@@ -75,13 +75,22 @@ export function normalizeEscapedNewlines(raw) {
  */
 export function isLikelyOddsHeader(parts) {
     const normalized = parts.map(p => String(p).trim().toUpperCase());
-    return normalized.length >= 8
+    // Support old header: GROUP;TEAM_A;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER
+    const isOldHeader = normalized.length >= 8
         && normalized[0] === 'GROUP'
         && normalized.includes('TEAM_A')
         && normalized.includes('TEAM_B')
         && normalized.includes('ODD1')
         && normalized.includes('ODDX')
         && normalized.includes('ODD2');
+    // Support new header: group  home  away  1  X  2  value  under  over
+    const isNewHeader = normalized.length >= 9
+        && normalized[0] === 'GROUP'
+        && (normalized.includes('HOME') || normalized.includes('AWAY'))
+        && normalized.includes('VALUE')
+        && normalized.includes('UNDER')
+        && normalized.includes('OVER');
+    return isOldHeader || isNewHeader;
 }
 
 /**

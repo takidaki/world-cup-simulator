@@ -718,11 +718,11 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
         }
 
         // --- Coordinate Descent solver: fits (totalGoals, supremacy, rho) simultaneously ---
-        function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, drawPrice, awayPrice) {
+        function calculateExpectedGoalsFromOdds(overPrice, underPrice, homePrice, drawPrice, awayPrice, goalLine = 2.5) {
             // --- Step 1: Shin's method for accurate true-probability extraction ---
             const impliedOU = [1 / overPrice, 1 / underPrice];
             const shinOU = shinTrueProbs(impliedOU);
-            const targetUnder = shinOU[1]; // P(under 2.5)
+            const targetUnder = shinOU[1]; // P(under goalLine)
 
             const implied1X2 = [1 / homePrice, 1 / drawPrice, 1 / awayPrice];
             const shin1X2 = shinTrueProbs(implied1X2);
@@ -747,7 +747,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     totalGoals = (lo1 + hi1) / 2;
                     const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
                     const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    const p = calculateModelProbsFromXG(hXG, aXG, goalLine, rho);
                     if (Math.abs(p.modelProbUnderNoExact - targetUnder) < tol) break;
                     if (p.modelProbUnderNoExact > targetUnder) lo1 = totalGoals;
                     else hi1 = totalGoals;
@@ -760,7 +760,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     supremacy = (lo2 + hi2) / 2;
                     const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
                     const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    const p = calculateModelProbsFromXG(hXG, aXG, goalLine, rho);
                     const err = p.modelProbHomeWinNoDraw - targetHomeNoDraw;
                     if (Math.abs(err) < tol) break;
                     if (err > 0) hi2 = supremacy;
@@ -773,7 +773,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     rho = (loR + hiR) / 2;
                     const hXG = Math.max(0.01, totalGoals / 2 + supremacy / 2);
                     const aXG = Math.max(0.01, totalGoals / 2 - supremacy / 2);
-                    const p = calculateModelProbsFromXG(hXG, aXG, 2.5, rho);
+                    const p = calculateModelProbsFromXG(hXG, aXG, goalLine, rho);
                     const err = p.probDrawFull - targetPX;
                     if (Math.abs(err) < tol) break;
                     // Negative rho increases draw probability (boosts 0-0 and 1-1)
@@ -790,7 +790,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             rho = Math.max(-0.4, Math.min(rho, maxSafeRho - 0.01));
 
             // Validate convergence
-            const finalP = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, 2.5, rho);
+            const finalP = calculateModelProbsFromXG(homeExpectedGoals, awayExpectedGoals, goalLine, rho);
             const errUnder = Math.abs(finalP.modelProbUnderNoExact - targetUnder);
             const errHome = Math.abs(finalP.modelProbHomeWinNoDraw - targetHomeNoDraw);
             const errDraw = Math.abs(finalP.probDrawFull - targetPX);
@@ -866,9 +866,9 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
         const TEAM_NAME_ALIASES = {
             'bosnia and herzegovina': 'Bosnia & Herzegovina',
             'curacao': 'Curaçao',
-            'dr congo': 'DR Congo',
-            'd r congo': 'DR Congo',
-            'democratic republic congo': 'DR Congo'
+            'dr congo': 'D.R. Congo',
+            'd r congo': 'D.R. Congo',
+            'democratic republic congo': 'D.R. Congo'
         };
 
         function canonicalizeTeamName(teamName) {
@@ -878,13 +878,22 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
 
         function isLikelyOddsHeader(parts) {
             const normalized = parts.map(p => String(p).trim().toUpperCase());
-            return normalized.length >= 8
+            // Support old header: GROUP;TEAM_A;TEAM_B;ODD1;ODDX;ODD2;ODD_UNDER;ODD_OVER
+            const isOldHeader = normalized.length >= 8
                 && normalized[0] === 'GROUP'
                 && normalized.includes('TEAM_A')
                 && normalized.includes('TEAM_B')
                 && normalized.includes('ODD1')
                 && normalized.includes('ODDX')
                 && normalized.includes('ODD2');
+            // Support new header: group  home  away  1  X  2  value  under  over
+            const isNewHeader = normalized.length >= 9
+                && normalized[0] === 'GROUP'
+                && (normalized.includes('HOME') || normalized.includes('AWAY'))
+                && normalized.includes('VALUE')
+                && normalized.includes('UNDER')
+                && normalized.includes('OVER');
+            return isOldHeader || isNewHeader;
         }
 
         function getCsvExportDateTime() {
@@ -1089,14 +1098,26 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 parts = parts.filter(p => p.length > 0);
                 if (index === 0 && isCsvLike && isLikelyOddsHeader(parts)) return;
                 let group, team1Name, team2Name, oddsStrings;
+                let ouLineValue = 2.5; // default total goals line
                 if (isCsvLike) {
                     const vsIdx = parts.indexOf('vs');
                     if (vsIdx !== -1) {
+                        // Legacy 'vs' format: G, T1, vs, T2, O1, OX, O2, OU_U, OU_O
                         if (vsIdx > 0 && vsIdx < parts.length - 5) { group = parts[0]; team1Name = parts.slice(1, vsIdx).join(" "); team2Name = parts.slice(vsIdx + 1, parts.length - 5).join(" "); oddsStrings = parts.slice(parts.length - 5); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV 'vs'): Empty T names. L:"${line}"`); return; }}
                         else { errors.push(`L${index+1}(CSV 'vs'): 'vs' wrong pos/few odds. L:"${line}"`); return; }
+                    } else if (parts.length >= 9) {
+                        // New 9-column format: group, home, away, 1, X, 2, value, under, over
+                        group = parts[0]; team1Name = parts[1]; team2Name = parts[2];
+                        const parsedOULine = parseFloat(parts[6]);
+                        ouLineValue = (!isNaN(parsedOULine) && parsedOULine > 0) ? parsedOULine : 2.5;
+                        oddsStrings = [parts[3], parts[4], parts[5], parts[7], parts[8]];
+                        if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV 9-col): Empty T names. L:"${line}"`); return; }
+                    } else if (parts.length >= 8) {
+                        // Old 8-column format: G, T1, T2, O1, OX, O2, OU_U, OU_O
+                        group = parts[0]; team1Name = parts[1]; team2Name = parts[2]; oddsStrings = parts.slice(3, 8);
+                        if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV no 'vs'): Empty T names. L:"${line}"`); return; }
                     } else {
-                        if (parts.length >= 8) { group = parts[0]; team1Name = parts[1]; team2Name = parts[2]; oddsStrings = parts.slice(3, 8); if (!team1Name || !team2Name) { errors.push(`L${index+1}(CSV no 'vs'): Empty T names. L:"${line}"`); return; }}
-                        else { errors.push(`L${index+1}(CSV no 'vs'): <8 cols. Exp G,T1,T2,O1,OX,O2,OU_U,OU_O. Got ${parts.length}. L:"${line}"`); return; }
+                        errors.push(`L${index+1}(CSV): <8 cols. Exp G,T1,T2,1,X,2,[value],U,O. Got ${parts.length}. L:"${line}"`); return;
                     }
                 } else {
                     const vsIdx = parts.indexOf('vs');
@@ -1108,9 +1129,9 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 if (odds.some(isNaN)) { errors.push(`L${index+1}: Invalid odds. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
                 if (odds.some(o => o <= 1)) { errors.push(`L${index+1}: Odds must be >1.0. Odds:"${oddsStrings.join(', ')}". L:"${line}"`); return; }
 
-                const [o1, ox, o2, oUnder25, oOver25] = odds;
+                const [o1, ox, o2, oUnder, oOver] = odds;
 
-                const xGResult = calculateExpectedGoalsFromOdds(oOver25, oUnder25, o1, ox, o2);
+                const xGResult = calculateExpectedGoalsFromOdds(oOver, oUnder, o1, ox, o2, ouLineValue);
                 let lambda1 = xGResult.homeXG;
                 let lambda2 = xGResult.awayXG;
                 let matchRho = xGResult.matchRho || 0;
@@ -1125,7 +1146,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 if (isNaN(lambda1) || isNaN(lambda2) || lambda1 <=0 || lambda2 <=0) {
                    warnings.push(`L${index+1}: xG calc produced invalid values for ${team1Name} v ${team2Name}. Using fallback. H=${lambda1?.toFixed(2)},A=${lambda2?.toFixed(2)}`);
                    // Fallback using Shin probabilities
-                   const lt_fb_simple_approx = 2.5;
+                   const lt_fb_simple_approx = ouLineValue;
                    const s1_fb = p1_market + 0.5 * px_market;
                    const s2_fb = p2_market + 0.5 * px_market;
                    if(s1_fb + s2_fb > 0){
@@ -1141,7 +1162,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 team1Name = canonicalizeTeamName(team1Name);
                 team2Name = canonicalizeTeamName(team2Name);
 
-                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2, matchRho };
+                const match = { lineNum:index+1, group, team1:team1Name, team2:team2Name, p1: p1_market, px: px_market, p2: p2_market, lambda1, lambda2, matchRho, ouLine: ouLineValue };
                 parsedMatches.push(match); allTeams.add(team1Name); allTeams.add(team2Name);
                 if (!groupedMatches[group]) { groupedMatches[group]=[]; groupTeamNames[group]=new Set(); }
                 groupedMatches[group].push(match); groupTeamNames[group].add(team1Name); groupTeamNames[group].add(team2Name);
@@ -2953,80 +2974,80 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             renderLambdaView();
         });
 
-        // --- Initial Sample Data (72 matches from match_odds_all_72.csv) ---
+        // --- Initial Sample Data (72 matches - 9-column format: group, home, away, 1, X, 2, value, under, over) ---
         inputModeEl.value = 'odds';
-        matchDataEl.value = `A	Mexico	vs	South Africa	1.56	4.33	6.4	1.91	1.91
-A	South Korea	vs	Czech Republic	2.6	3.11	2.61	1.62	2.18
-B	Canada	vs	Bosnia & Herzegovina	1.86	3.55	3.72	1.65	2.13
-B	USA	vs	Paraguay	1.96	3.84	3.86	1.84	1.99
-C	Qatar	vs	Switzerland	12.0	5.8	1.3	2.25	1.66
-C	Brazil	vs	Morocco	1.65	3.92	6.0	1.89	1.93
-D	Haiti	vs	Scotland	7.1	5.05	1.45	2.02	1.81
-D	Australia	vs	Turkey	3.84	3.4	1.87	1.71	2.04
-E	Germany	vs	Curacao	1.03	20.0	85.0	1.83	2.0
-E	Netherlands	vs	Japan	1.97	3.75	3.94	1.92	1.9
-F	Ivory Coast	vs	Ecuador	3.52	2.9	2.5	1.51	2.6
-F	Sweden	vs	Tunisia	1.9	3.37	3.74	1.63	2.16
-G	Spain	vs	Cape Verde	1.1	10.5	35.0	1.94	1.88
-G	Belgium	vs	Egypt	1.69	4.2	5.05	2.03	1.8
-H	Saudi Arabia	vs	Uruguay	5.95	4.05	1.63	1.86	1.96
-H	Iran	vs	New Zealand	1.77	3.78	5.0	1.77	2.07
-I	France	vs	Senegal	1.47	4.6	7.6	1.97	1.85
-I	Iraq	vs	Norway	7.93	5.6	1.3	2.26	1.61
-J	Argentina	vs	Algeria	1.44	4.45	9.2	1.91	1.91
-J	Austria	vs	Jordan	1.36	5.4	9.2	2.29	1.64
-K	Portugal	vs	D.R. Congo	1.3	4.8	8.7	2.28	1.57
-K	England	vs	Croatia	1.69	4.1	5.2	1.87	1.95
-L	Ghana	vs	Panama	2.01	3.84	3.7	1.81	2.02
-L	Uzbekistan	vs	Colombia	8.4	4.65	1.44	1.97	1.85
-A	Czech Republic	vs	South Africa	1.92	3.48	3.65	1.75	2.05
-C	Switzerland	vs	Bosnia & Herzegovina	2.05	3.6	3.35	1.98	1.84
-B	Canada	vs	Qatar	1.45	4.4	8.0	1.72	2.1
-A	Mexico	vs	South Korea	1.97	3.65	3.75	1.85	1.95
-B	USA	vs	Australia	2.7	3.35	2.7	1.82	2.0
-D	Scotland	vs	Morocco	3.05	3.25	2.45	1.78	2.02
-C	Brazil	vs	Haiti	1.12	9.5	25.0	2.2	1.65
-D	Turkey	vs	Paraguay	2.05	3.5	3.45	1.83	1.98
-F	Netherlands	vs	Sweden	1.7	4.0	4.8	2.15	1.7
-E	Germany	vs	Ivory Coast	1.5	4.5	7.0	1.95	1.85
-E	Ecuador	vs	Curacao	1.32	5.1	11.0	2.05	1.75
-F	Tunisia	vs	Japan	3.35	3.3	2.25	1.72	2.12
-G	Spain	vs	Saudi Arabia	1.25	6.0	14.0	2.15	1.7
-H	Belgium	vs	Iran	1.45	4.5	7.8	1.98	1.82
-G	Uruguay	vs	Cape Verde	1.48	4.6	7.2	2.2	1.68
-H	New Zealand	vs	Egypt	3.75	3.35	2.05	1.64	2.25
-J	Argentina	vs	Austria	1.47	4.7	7.4	2.22	1.66
-I	France	vs	Iraq	1.15	8.5	19.0	2.35	1.58
-I	Norway	vs	Senegal	2.05	3.5	3.45	1.83	1.98
-J	Jordan	vs	Algeria	6.5	4.6	1.5	1.9	1.9
-K	Portugal	vs	Uzbekistan	1.2	7.5	16.0	2.3	1.62
-L	England	vs	Ghana	1.34	5.2	10.0	2.08	1.76
-L	Panama	vs	Croatia	7.5	4.9	1.42	2.0	1.8
-K	Colombia	vs	D.R. Congo	1.65	4.0	5.5	1.95	1.85
-B	Bosnia & Herzegovina	vs	Qatar	1.48	4.2	8.2	1.58	2.4
-C	Switzerland	vs	Canada	2.08	3.45	3.5	1.78	2.05
-C	Morocco	vs	Haiti	1.25	6.1	15.0	2.12	1.72
-D	Scotland	vs	Brazil	10.0	5.5	1.33	2.25	1.65
-A	Czech Republic	vs	Mexico	2.95	3.25	2.5	1.74	2.08
-A	South Africa	vs	South Korea	3.45	3.25	2.25	1.68	2.18
-E	Curacao	vs	Ivory Coast	8.0	4.8	1.43	1.88	1.92
-E	Ecuador	vs	Germany	5.2	4.1	1.68	1.92	1.9
-F	Japan	vs	Sweden	2.45	3.4	2.85	1.89	1.92
-F	Tunisia	vs	Netherlands	6.5	4.4	1.52	2.2	1.68
-D	Paraguay	vs	Australia	2.1	3.4	3.6	1.79	2.03
-B	Turkey	vs	USA	2.75	3.3	2.65	1.78	2.05
-I	Norway	vs	France	4.6	3.95	1.75	2.05	1.78
-I	Senegal	vs	Iraq	1.75	3.85	4.8	1.98	1.84
-G	Cape Verde	vs	Saudi Arabia	3.05	3.15	2.55	1.62	2.3
-G	Uruguay	vs	Spain	5.8	4.3	1.6	1.93	1.88
-H	Egypt	vs	Iran	2.35	3.2	3.25	1.65	2.25
-H	New Zealand	vs	Belgium	8.5	5.0	1.38	2.15	1.7
-L	Croatia	vs	Ghana	1.95	3.4	4.1	1.68	2.2
-L	Panama	vs	England	22.0	9.0	1.15	2.2	1.67
-K	Colombia	vs	Portugal	4.1	3.8	1.85	2.0	1.82
-K	D.R. Congo	vs	Uzbekistan	2.15	3.25	3.7	1.63	2.3
-J	Algeria	vs	Austria	2.75	3.35	2.65	1.83	1.98
-J	Jordan	vs	Argentina	16.0	7.0	1.2	2.05	1.78`;
+        matchDataEl.value = `A\tMexico\tSouth Africa\t1.5\t4\t5.5\t2.5\t1.9\t1.98
+A\tSouth Korea\tCzech Republic\t2.55\t3.2\t2.6\t2.25\t1.87\t2.01
+B\tCanada\tBosnia & Herzegovina\t1.83\t3.7\t3.6\t2.25\t1.9\t1.96
+C\tUSA\tParaguay\t1.83\t3.5\t3.8\t2.5\t1.83\t2
+B\tQatar\tSwitzerland\t9\t5.25\t1.27\t2.75\t2.03\t1.83
+D\tBrazil\tMorocco\t1.55\t3.8\t5.25\t2.5\t1.94\t1.95
+D\tHaiti\tScotland\t6.25\t4.75\t1.38\t2.75\t1.83\t2.03
+C\tAustralia\tTurkey\t3.75\t3.5\t1.85\t2.25\t2.01\t1.88
+E\tGermany\tCuracao\t1.02\t21\t51\t4.25\t2\t1.88
+F\tNetherlands\tJapan\t1.95\t3.5\t3.3\t2.5\t1.95\t1.91
+E\tIvory Coast\tEcuador\t2.9\t3.2\t2.3\t2\t1.95\t1.91
+F\tSweden\tTunisia\t1.85\t3.5\t3.7\t2.25\t1.88\t2.04
+G\tSpain\tCape Verde\t1.08\t15\t21\t3.5\t1.96\t1.91
+H\tBelgium\tEgypt\t1.6\t3.8\t5\t2.75\t1.85\t2.03
+G\tSaudi Arabia\tUruguay\t5.25\t3.9\t1.53\t2.5\t1.93\t1.98
+H\tIran\tNew Zealand\t1.65\t3.6\t4.5\t2.25\t2.03\t1.93
+I\tFrance\tSenegal\t1.44\t4.2\t6.25\t2.75\t1.86\t2.07
+I\tIraq\tNorway\t7.5\t5.5\t1.27\t2.75\t2.04\t1.84
+J\tArgentina\tAlgeria\t1.38\t4.33\t7\t2.5\t1.93\t1.93
+J\tAustria\tJordan\t1.33\t4.5\t8.5\t3\t1.81\t2.03
+K\tPortugal\tD.R. Congo\t1.3\t4.75\t9\t3\t1.86\t2.03
+L\tEngland\tCroatia\t1.62\t3.8\t4.5\t2.5\t1.93\t2
+L\tGhana\tPanama\t2\t3.4\t3.3\t2.5\t1.81\t2.05
+K\tColombia\tUzbekistan\t1.38\t4.5\t7\t2.5\t2\t1.85
+A\tCzech Republic\tSouth Africa\t2.05\t3.25\t3.7\t2.5\t1.5\t2.5
+B\tSwitzerland\tBosnia & Herzegovina\t1.61\t3.6\t5.6\t2.5\t1.85\t1.95
+B\tCanada\tQatar\t1.68\t3.95\t5.7\t2.5\t1.9\t1.9
+A\tMexico\tSouth Korea\t1.8\t3.6\t4.2\t2.5\t1.6\t2.35
+C\tUSA\tAustralia\t1.6\t3.75\t5.4\t2.5\t1.8\t2
+D\tScotland\tMorocco\t3.35\t3.39\t2.36\t2.5\t1.63\t2.3
+D\tBrazil\tHaiti\t1.05\t10\t50\t3.5\t2\t1.8
+C\tTurkey\tParaguay\t2\t3.3\t3.6\t2.5\t1.7\t2.1
+F\tNetherlands\tSweden\t1.6\t4.2\t6.4\t2.5\t2.1\t1.75
+E\tGermany\tIvory Coast\t1.35\t4.75\t7.8\t2.5\t1.85\t1.95
+E\tEcuador\tCuracao\t1.15\t7\t17\t2.5\t2\t1.8
+F\tTunisia\tJapan\t4.1\t3.4\t1.85\t2.5\t1.65\t2.2
+G\tSpain\tSaudi Arabia\t1.15\t7\t15\t2.5\t2.2\t1.65
+H\tBelgium\tIran\t1.4\t4.5\t7\t2.5\t1.85\t1.95
+G\tUruguay\tCape Verde\t1.25\t5.2\t11\t2.5\t1.95\t1.85
+H\tNew Zealand\tEgypt\t5\t4.1\t1.58\t2.5\t1.65\t2.2
+J\tArgentina\tAustria\t1.35\t4.9\t7.8\t2.5\t2.1\t1.7
+I\tFrance\tIraq\t1.09\t9.6\t17\t2.5\t2.3\t1.6
+I\tNorway\tSenegal\t2.05\t4.15\t3.86\t2.5\t1.85\t1.95
+J\tJordan\tAlgeria\t5.75\t4.04\t1.7\t2.5\t1.8\t2
+K\tPortugal\tUzbekistan\t1.2\t6\t12\t2.5\t2.3\t1.6
+L\tEngland\tGhana\t1.3\t4.85\t9.5\t2.5\t1.95\t1.85
+L\tPanama\tCroatia\t7\t4.5\t1.4\t2.5\t1.85\t1.95
+K\tColombia\tD.R. Congo\t1.5\t3.9\t6.6\t2.5\t1.8\t2
+B\tBosnia & Herzegovina\tQatar\t1.8\t3.6\t4.2\t2.5\t1.6\t2.3
+B\tSwitzerland\tCanada\t2.2\t3.3\t3.2\t2.5\t1.65\t2.2
+D\tScotland\tBrazil\t7.2\t4.9\t1.37\t2.5\t2.1\t1.7
+D\tMorocco\tHaiti\t1.27\t5.2\t11\t2.5\t1.9\t1.9
+A\tCzech Republic\tMexico\t4.2\t3.6\t1.8\t2.5\t1.65\t2.2
+A\tSouth Africa\tSouth Korea\t3.25\t3.25\t2.2\t2.5\t1.6\t2.25
+E\tCuracao\tIvory Coast\t11\t5.6\t1.25\t2.5\t1.85\t1.95
+E\tEcuador\tGermany\t5.8\t3.7\t1.6\t2.5\t1.9\t1.9
+F\tJapan\tSweden\t2.6\t3.1\t2.7\t2.5\t1.85\t1.95
+F\tNetherlands\tTunisia\t1.42\t4.5\t7\t2.5\t2\t1.8
+C\tAustralia\tParaguay\t3.25\t3.5\t2.1\t2.5\t1.67\t2.05
+C\tTurkey\tUSA\t2.85\t3.15\t2.5\t2.5\t1.7\t2.1
+I\tFrance\tNorway\t1.95\t3.3\t3.9\t2.5\t1.9\t1.9
+I\tSenegal\tIraq\t1.56\t4\t5.4\t2.5\t1.85\t1.95
+G\tCape Verde\tSaudi Arabia\t3.4\t3.1\t2.2\t2.5\t1.6\t2.3
+G\tUruguay\tSpain\t5.9\t3.9\t1.55\t2.5\t1.85\t1.95
+H\tNew Zealand\tBelgium\t14\t6\t1.2\t2.5\t2.1\t1.7
+H\tEgypt\tIran\t2.4\t2.9\t3.25\t2.5\t1.57\t2.35
+L\tCroatia\tGhana\t1.8\t4.1\t4.51\t2.5\t1.6\t2.3
+L\tPanama\tEngland\t18\t7.8\t1.15\t2.5\t2.4\t1.55
+K\tColombia\tPortugal\t3.42\t3.3\t2.1\t2.5\t1.85\t1.95
+K\tD.R. Congo\tUzbekistan\t2.3\t3.1\t3.2\t2.5\t1.6\t2.3
+J\tAlgeria\tAustria\t3.4\t3\t2.25\t2.5\t1.68\t2.15
+J\tJordan\tArgentina\t20\t7.5\t1.13\t2.5\t2.1\t1.7`;
         eloDataEl.value = `GROUP,TEAM,ELO_RATING
 A,South Korea,1844
 A,Czech Republic,1731
@@ -3036,14 +3057,14 @@ B,Switzerland,1897
 B,Canada,1744
 B,Bosnia and Herzegovina,1572
 B,Qatar,1540
-C,Brazil,1970
-C,Morocco,1785
-C,Scotland,1790
-C,Haiti,1420
-D,USA,1812
-D,Turkey,1880
-D,Australia,1733
-D,Paraguay,1722
+C,USA,1812
+C,Turkey,1880
+C,Australia,1733
+C,Paraguay,1722
+D,Brazil,1970
+D,Morocco,1785
+D,Scotland,1790
+D,Haiti,1420
 E,Germany,1910
 E,Ecuador,1933
 E,Ivory Coast,1720
@@ -3052,14 +3073,14 @@ F,Netherlands,1959
 F,Sweden,1660
 F,Japan,1825
 F,Tunisia,1615
-G,Belgium,1850
-G,Iran,1810
-G,Egypt,1748
-G,New Zealand,1555
-H,Spain,2172
-H,Uruguay,1895
-H,Saudi Arabia,1588
-H,Cape Verde,1530
+G,Spain,2172
+G,Uruguay,1895
+G,Saudi Arabia,1588
+G,Cape Verde,1530
+H,Belgium,1850
+H,Iran,1810
+H,Egypt,1748
+H,New Zealand,1555
 I,France,2062
 I,Norway,1922
 I,Senegal,1792
@@ -3070,7 +3091,7 @@ J,Algeria,1735
 J,Jordan,1525
 K,Portugal,1976
 K,Colombia,1975
-K,DR Congo,1515
+K,D.R. Congo,1515
 K,Uzbekistan,1645
 L,England,2042
 L,Croatia,1932

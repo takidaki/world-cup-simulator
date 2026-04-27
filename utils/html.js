@@ -188,7 +188,7 @@ export function createTeamLambdaTable(teamStats) {
  * @returns {HTMLElement}
  */
 export function createMatchLambdaTable(matches) {
-    const headers = ['Group', 'Line', 'Team 1', 'Team 2', 'Team 1 xPts', 'Team 2 xPts', 'Lambda 1', 'Lambda 2', 'Total', 'Supremacy', 'ρ'];
+    const headers = ['Group', 'Line', 'Team 1', 'Team 2', 'Team 1 xPts', 'Team 2 xPts', 'Lambda 1', 'Lambda 2', 'Total', 'Supremacy', 'O/U Line', 'ρ'];
     const rows = matches.map(match => [
         match.group,
         match.lineNum.toString(),
@@ -200,6 +200,7 @@ export function createMatchLambdaTable(matches) {
         formatNumber(match.lambda2),
         formatNumber(match.lambda1 + match.lambda2),
         formatNumber(match.lambda1 - match.lambda2),
+        match.ouLine != null ? match.ouLine.toFixed(2) : '2.50',
         match.matchRho != null ? formatNumber(match.matchRho) : '—'
     ]);
 
