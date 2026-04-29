@@ -125,6 +125,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
         const customProbAndOddResultAreaEl = document.getElementById('customProbAndOddResultArea');
         const generateTeamCsvButtonEl = document.getElementById('generateTeamCsvButton'); 
         const generateGroupCsvButtonEl = document.getElementById('generateGroupCsvButton');
+        const generateGlobalCsvButtonEl = document.getElementById('generateGlobalCsvButton');
         const tieBreakPresetEl = document.getElementById('tieBreakPreset');
         const tieBreakPresetHelpEl = document.getElementById('tieBreakPresetHelp');
         const advancementPresetEl = document.getElementById('advancementPreset');
@@ -155,6 +156,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
         const exportRawDataErrorEl = document.getElementById('exportRawDataError');
         const generateTeamCsvErrorEl = document.getElementById('generateTeamCsvError');
         const generateGroupCsvErrorEl = document.getElementById('generateGroupCsvError');
+        const generateGlobalCsvErrorEl = document.getElementById('generateGlobalCsvError');
         const powerRatingsContentEl = document.getElementById('powerRatingsContent');
 
         function syncSimulationPresetFromInput() {
@@ -1536,14 +1538,14 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             [gA90, gB90] = sampleDixonColes(buildDixonColesCDF(lambdaA, lambdaB, effectiveRho));
             
             if (gA90 !== gB90) {
-                return { winner: gA90 > gB90 ? teamA : teamB, loser: gA90 > gB90 ? teamB : teamA, goalsA: gA90, goalsB: gB90 };
+                return { winner: gA90 > gB90 ? teamA : teamB, loser: gA90 > gB90 ? teamB : teamA, goalsA: gA90, goalsB: gB90, wentToET: false, wentToPens: false };
             }
 
             // Fatigue-Adjusted Extra Time Model (~30 mins, but scaled down 20% due to fatigue/caution)
             const etFatigueFactor = 0.8;
             const etLambdaA = (lambdaA / 3) * etFatigueFactor;
             const etLambdaB = (lambdaB / 3) * etFatigueFactor;
-            
+
             // Dynamic Extra Time rho (more caution -> even more negative rho)
             const etRho = Math.max(-0.3, effectiveRho - 0.05);
             let gAET, gBET;
@@ -1552,7 +1554,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             const finalGoalsA = gA90 + gAET;
             const finalGoalsB = gB90 + gBET;
             if (gAET !== gBET) {
-                return { winner: gAET > gBET ? teamA : teamB, loser: gAET > gBET ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
+                return { winner: gAET > gBET ? teamA : teamB, loser: gAET > gBET ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB, wentToET: true, wentToPens: false };
             }
 
             // Penalty Shootout based on team strengths
@@ -1567,9 +1569,9 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             } else {
                 pAWinsPens = Math.max(0.35, Math.min(0.65, 0.5 + ((eloA - eloB) / 2000)));
             }
-            
+
             const aWinsPens = Math.random() < pAWinsPens;
-            return { winner: aWinsPens ? teamA : teamB, loser: aWinsPens ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB };
+            return { winner: aWinsPens ? teamA : teamB, loser: aWinsPens ? teamB : teamA, goalsA: finalGoalsA, goalsB: finalGoalsB, wentToET: true, wentToPens: true };
         }
 
         function parseHybridInputData() {
@@ -1779,6 +1781,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     }
                     populateSimGroupSelect();
                     populateTournamentTeamSelect();
+                    if (generateGlobalCsvButtonEl) generateGlobalCsvButtonEl.disabled = false;
                     exportRawDataSectionEl.classList.remove('hidden');
                     multiGroupViewContentEl.innerHTML = 'Run simulation first, then click "Show Multi-Group Overview".';
                     renderStatus('success', `Simulation complete! (${currentNumSims.toLocaleString()} runs)`);
@@ -1848,13 +1851,24 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 });
             }
             initializeKnockoutStats(aggStats, groupTeamNames);
-            for(let i=0; i<numSims; i++){ 
+            aggStats._global = {
+                groupGoalsSims: [], tournamentGoalsSims: [],
+                zeroZeroSims: [], ggMatchesSims: [],
+                threePlusSims: [], fourPlusSims: [], fivePlusSims: [],
+                sixPlusSims: [], sevenPlusSims: [],
+                extraTimeSims: [], penaltyShootoutSims: [],
+                topTeamGoalsSims: [],
+            };
+            for(let i=0; i<numSims; i++){
                 const simTournamentTotals = {};
                 Object.keys(aggStats._knockout.teamProgress).forEach(team => {
                     simTournamentTotals[team] = { gf: 0, ga: 0, games: 0 };
                 });
                 const thirdPlacedTeams = [];
                 const groupStandings = {};
+                let _simGSGoals = 0, _simZeroZero = 0, _simGG = 0;
+                let _simThreePlus = 0, _simFourPlus = 0, _simFivePlus = 0, _simSixPlus = 0, _simSevenPlus = 0;
+                let _simET = 0, _simPens = 0, _simKOGoals = 0;
                 for(const gK in groupedMatches){ 
                     const cGMs=groupedMatches[gK];
                     const tIG=[...(groupTeamNames[gK]||[])]; 
@@ -1877,6 +1891,15 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                             [g1, g2] = sampleDixonColes(dcCDFCache.get(m._dcCacheKey));
                         }
                         simulatedGroupMatches.push({ team1: m.team1, team2: m.team2, g1, g2 });
+                        _simGSGoals += g1 + g2;
+                        const _mg = g1 + g2;
+                        if (g1 === 0 && g2 === 0) _simZeroZero++;
+                        if (g1 > 0 && g2 > 0) _simGG++;
+                        if (_mg >= 3) _simThreePlus++;
+                        if (_mg >= 4) _simFourPlus++;
+                        if (_mg >= 5) _simFivePlus++;
+                        if (_mg >= 6) _simSixPlus++;
+                        if (_mg >= 7) _simSevenPlus++;
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;sTS[m.team1].groupGames+=1;if(g1===0)sTS[m.team1].scoredEveryGame=false;if(g2===0)sTS[m.team1].concededEveryGame=false;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;sTS[m.team2].groupGames+=1;if(g2===0)sTS[m.team2].scoredEveryGame=false;if(g1===0)sTS[m.team2].concededEveryGame=false;} 
                         cGTG+=(g1+g2); 
@@ -1981,13 +2004,20 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                         if (aggStats[team.group]) aggStats[team.group].thirdPlaceAdvancesCount++;
                     });
                     if (parsedBracketMatches.length > 0) {
+                        const _trackKO = (tA, tB) => {
+                            const r = simulateKnockoutMatch(tA, tB);
+                            if (r.wentToET) _simET++;
+                            if (r.wentToPens) _simPens++;
+                            _simKOGoals += r.goalsA + r.goalsB;
+                            return r;
+                        };
                         runKnockoutStage({
                             parsedBracketMatches,
                             aggStats,
                             groupStandings,
                             thirdRankedList: sortedThirds.slice(0, bestThirdSlots),
                             simTournamentTotals,
-                            simulateKnockoutMatch,
+                            simulateKnockoutMatch: _trackKO,
                             incrementRoundReach,
                             recordMatchupInPath
                         });
@@ -2008,6 +2038,18 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     if (totals.gf === maxTournamentGF && maxTournamentGF > 0) kpStats.mostTournamentGFCount++;
                     if (totals.ga === maxTournamentGA && maxTournamentGA > 0) kpStats.mostTournamentGACount++;
                 });
+                aggStats._global.groupGoalsSims.push(_simGSGoals);
+                aggStats._global.tournamentGoalsSims.push(_simGSGoals + _simKOGoals);
+                aggStats._global.zeroZeroSims.push(_simZeroZero);
+                aggStats._global.ggMatchesSims.push(_simGG);
+                aggStats._global.threePlusSims.push(_simThreePlus);
+                aggStats._global.fourPlusSims.push(_simFourPlus);
+                aggStats._global.fivePlusSims.push(_simFivePlus);
+                aggStats._global.sixPlusSims.push(_simSixPlus);
+                aggStats._global.sevenPlusSims.push(_simSevenPlus);
+                aggStats._global.extraTimeSims.push(_simET);
+                aggStats._global.penaltyShootoutSims.push(_simPens);
+                aggStats._global.topTeamGoalsSims.push(maxTournamentGF);
             }
             return aggStats;
         }
@@ -2524,6 +2566,173 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
                 link.setAttribute("download", `team_markets_${teamName.replace(/\s+/g, '_')}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function exportGlobalCsv(marginPercent, errorEl) {
+            const marginDecimal = marginPercent / 100;
+            if (isNaN(marginPercent) || marginPercent < 0 || marginPercent > 100) {
+                showInlineError(errorEl, 'Please enter a valid margin between 0 and 100.');
+                return;
+            }
+            const global = simulationAggStats?._global;
+            if (!global || global.groupGoalsSims.length === 0) {
+                showInlineError(errorEl, 'No simulation data. Run a simulation first.');
+                return;
+            }
+
+            const { date, time } = getCsvExportDateTime();
+            const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
+            const rows = [];
+
+            const addLineRow = (market, line, values) => {
+                const { overProb, underProb } = getLineProbabilities(values, line);
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = market;
+                row[8] = line.toFixed(1);
+                row[9] = calculateOddWithMargin(underProb, marginDecimal);
+                row[10] = calculateOddWithMargin(overProb, marginDecimal);
+                rows.push(buildCsvRow(row));
+            };
+            const addEmptyRow = (market) => {
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = market;
+                rows.push(buildCsvRow(row));
+            };
+
+            let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
+            const matchNameRow = emptyRow();
+            matchNameRow[0] = 'MATCH_NAME: World Cup 2026';
+            csvContent += buildCsvRow(matchNameRow);
+            const leagueRow = emptyRow();
+            leagueRow[0] = 'LEAGUE_NAME: Specijal';
+            csvContent += buildCsvRow(leagueRow);
+            csvContent += buildCsvRow(emptyRow());
+
+            buildDynamicHalfPointLines(global.groupGoalsSims, average(global.groupGoalsSims)).forEach(line => {
+                addLineRow('Ukupno golova grupna faza', line, global.groupGoalsSims);
+            });
+            if (global.tournamentGoalsSims.some(v => v > 0)) {
+                buildDynamicHalfPointLines(global.tournamentGoalsSims, average(global.tournamentGoalsSims)).forEach(line => {
+                    addLineRow('Ukupno golova na prvenstvu', line, global.tournamentGoalsSims);
+                });
+            } else {
+                addEmptyRow('Ukupno golova na prvenstvu');
+            }
+            addEmptyRow('Ukupno het-trikova');
+            addEmptyRow('Ukupno autogolova');
+            addEmptyRow('Ukupno golova najbolji strelac');
+            if (global.penaltyShootoutSims.some(v => v > 0)) {
+                buildDynamicHalfPointLines(global.penaltyShootoutSims, average(global.penaltyShootoutSims)).forEach(line => {
+                    addLineRow('Ukupno penal serija', line, global.penaltyShootoutSims);
+                });
+            } else {
+                addEmptyRow('Ukupno penal serija');
+            }
+            if (global.extraTimeSims.some(v => v > 0)) {
+                buildDynamicHalfPointLines(global.extraTimeSims, average(global.extraTimeSims)).forEach(line => {
+                    addLineRow('Ukupno produzetaka', line, global.extraTimeSims);
+                });
+            } else {
+                addEmptyRow('Ukupno produzetaka');
+            }
+            addEmptyRow('Ukupno golova u produzecima');
+            addEmptyRow('Ukupno zutih kartona na prvenstvu');
+            addEmptyRow('Ukupno crvenih kartona na prvenstvu');
+            addEmptyRow('Ukupno crvenih kartona grupna faza');
+            addEmptyRow('Ukupno dosudjenih penala na prvenstvu');
+            addEmptyRow('Ukupno dosudjenih penala grupna faza');
+            addEmptyRow('Ukupno realizovanih penala');
+            addEmptyRow('Ukupno realizovanih penala grupna faza');
+            buildDynamicHalfPointLines(global.topTeamGoalsSims, average(global.topTeamGoalsSims)).forEach(line => {
+                addLineRow('Ukupno golova najefikasniji tim', line, global.topTeamGoalsSims);
+            });
+            buildDynamicHalfPointLines(global.zeroZeroSims, average(global.zeroZeroSims)).forEach(line => {
+                addLineRow('Ukupno meceva 0:0', line, global.zeroZeroSims);
+            });
+            buildDynamicHalfPointLines(global.threePlusSims, average(global.threePlusSims)).forEach(line => {
+                addLineRow('Ukupno meceva 3+ golova', line, global.threePlusSims);
+            });
+            buildDynamicHalfPointLines(global.fourPlusSims, average(global.fourPlusSims)).forEach(line => {
+                addLineRow('Ukupno meceva 4+ golova', line, global.fourPlusSims);
+            });
+            buildDynamicHalfPointLines(global.fivePlusSims, average(global.fivePlusSims)).forEach(line => {
+                addLineRow('Ukupno meceva 5+ golova', line, global.fivePlusSims);
+            });
+            buildDynamicHalfPointLines(global.sixPlusSims, average(global.sixPlusSims)).forEach(line => {
+                addLineRow('Ukupno meceva 6+ golova', line, global.sixPlusSims);
+            });
+            buildDynamicHalfPointLines(global.sevenPlusSims, average(global.sevenPlusSims)).forEach(line => {
+                addLineRow('Ukupno meceva 7+ golova', line, global.sevenPlusSims);
+            });
+            buildDynamicHalfPointLines(global.ggMatchesSims, average(global.ggMatchesSims)).forEach(line => {
+                addLineRow('Ukupno GG meceva', line, global.ggMatchesSims);
+            });
+            addEmptyRow('Ukupno golova glavom');
+            addEmptyRow('Vreme najbrzeg gola (sekunde)');
+
+            csvContent += rows.join('');
+
+            // Grupa pobednika section — probability that tournament winner comes from each group
+            const groupKeys = Object.keys(groupTeamNames).sort();
+            const hasGroupWinnerData = groupKeys.some(gk =>
+                (groupTeamNames[gk] || []).some(t => (simulationAggStats._knockout?.teamProgress?.[t]?.winFINAL || 0) > 0)
+            );
+            if (hasGroupWinnerData) {
+                csvContent += buildCsvRow(emptyRow());
+                const mn2 = emptyRow(); mn2[0] = 'MATCH_NAME: World Cup 2026'; csvContent += buildCsvRow(mn2);
+                const ln2 = emptyRow(); ln2[0] = 'LEAGUE_NAME: Grupa pobednika'; csvContent += buildCsvRow(ln2);
+                csvContent += buildCsvRow(emptyRow());
+                groupKeys.forEach(gk => {
+                    const teams = groupTeamNames[gk] || [];
+                    const winCount = teams.reduce((s, t) => s + (simulationAggStats._knockout?.teamProgress?.[t]?.winFINAL || 0), 0);
+                    const prob = currentNumSims > 0 ? winCount / currentNumSims : 0;
+                    const row = emptyRow();
+                    row[0] = date; row[1] = time; row[3] = `Grupa ${gk}`;
+                    row[5] = calculateOddWithMargin(prob, marginDecimal);
+                    csvContent += buildCsvRow(row);
+                });
+            }
+
+            // Finalisti section — top 200 finalist pairs by probability
+            const pathData = simulationAggStats._knockout?._pathData || {};
+            const finalistPairs = {};
+            for (const [team, rounds] of Object.entries(pathData)) {
+                const finalOpps = rounds.FINAL || {};
+                for (const [opponent, count] of Object.entries(finalOpps)) {
+                    if (team < opponent) {
+                        const key = `${team}-${opponent}`;
+                        finalistPairs[key] = (finalistPairs[key] || 0) + count;
+                    }
+                }
+            }
+            const sortedPairs = Object.entries(finalistPairs)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 200);
+            if (sortedPairs.length > 0) {
+                csvContent += buildCsvRow(emptyRow());
+                const mn3 = emptyRow(); mn3[0] = 'MATCH_NAME: World Cup 2026'; csvContent += buildCsvRow(mn3);
+                const ln3 = emptyRow(); ln3[0] = 'LEAGUE_NAME: Finalisti'; csvContent += buildCsvRow(ln3);
+                csvContent += buildCsvRow(emptyRow());
+                sortedPairs.forEach(([pair, count]) => {
+                    const prob = currentNumSims > 0 ? count / currentNumSims : 0;
+                    const row = emptyRow();
+                    row[0] = date; row[1] = time; row[3] = pair;
+                    row[5] = calculateOddWithMargin(prob, marginDecimal);
+                    csvContent += buildCsvRow(row);
+                });
+            }
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'global_tournament_odds.csv');
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
@@ -3259,6 +3468,10 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
                 link.click();
                 document.body.removeChild(link);
             }
+        });
+
+        generateGlobalCsvButtonEl?.addEventListener('click', () => {
+            exportGlobalCsv(parseFloat(simBookieMarginEl.value), generateGlobalCsvErrorEl);
         });
 
         // --- New Feature: Scenario Lock clear button ---
