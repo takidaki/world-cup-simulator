@@ -1830,8 +1830,9 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
             const bestThirdSlots = Math.max(0, advancementPreset.bestThirdSlots || 0);
             for(const gr in groupedMatches){ 
                 aggStats[gr]={
-                    groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{}, 
+                    groupTotalGoalsSims:[], straightForecasts:{}, advancingDoubles:{},
                     groupTotalDrawsSims: [],
+                    groupThreePlusSims: [], groupZeroZeroSims: [], groupGGSims: [],
                     anyTeam9PtsCount:0, anyTeam0PtsCount:0, 
                     thirdPlaceAdvancesCount: 0,
                     firstPlacePtsSims:[], firstPlaceGFSims:[], 
@@ -1876,7 +1877,7 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     
                     const sTS={}; 
                     tIG.forEach(t=>sTS[t]={name:t,pts:0,gf:0,ga:0,gd:0, wins: 0, draws: 0, scoredEveryGame: true, concededEveryGame: true, noLoss: true, groupGames: 0}); 
-                    let cGTG=0, cGDraws=0;
+                    let cGTG=0, cGDraws=0, cGThreePlus=0, cGZeroZero=0, cGGG=0;
                     const simulatedGroupMatches = [];
             
                     cGMs.forEach(m=>{
@@ -1902,7 +1903,10 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                         if (_mg >= 7) _simSevenPlus++;
                         if(sTS[m.team1]){sTS[m.team1].gf+=g1;sTS[m.team1].ga+=g2;sTS[m.team1].groupGames+=1;if(g1===0)sTS[m.team1].scoredEveryGame=false;if(g2===0)sTS[m.team1].concededEveryGame=false;} 
                         if(sTS[m.team2]){sTS[m.team2].gf+=g2;sTS[m.team2].ga+=g1;sTS[m.team2].groupGames+=1;if(g2===0)sTS[m.team2].scoredEveryGame=false;if(g1===0)sTS[m.team2].concededEveryGame=false;} 
-                        cGTG+=(g1+g2); 
+                        cGTG+=(g1+g2);
+                        if (g1 === 0 && g2 === 0) cGZeroZero++;
+                        if (g1 > 0 && g2 > 0) cGGG++;
+                        if ((g1 + g2) >= 3) cGThreePlus++;
                         if(g1>g2){if(sTS[m.team1]){sTS[m.team1].pts+=3; sTS[m.team1].wins+=1;} if(sTS[m.team2]) sTS[m.team2].noLoss=false;}
                         else if(g2>g1){if(sTS[m.team2]){sTS[m.team2].pts+=3; sTS[m.team2].wins+=1;} if(sTS[m.team1]) sTS[m.team1].noLoss=false;}
                         else{
@@ -1925,6 +1929,9 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
                     if(aggStats[gK]) {
                         aggStats[gK].groupTotalGoalsSims.push(cGTG);
                         aggStats[gK].groupTotalDrawsSims.push(cGDraws);
+                        aggStats[gK].groupThreePlusSims.push(cGThreePlus);
+                        aggStats[gK].groupZeroZeroSims.push(cGZeroZero);
+                        aggStats[gK].groupGGSims.push(cGGG);
                     }
                     const rTs = sortStandingsWithTieBreakers(
                         tIG.map(tN=>{const s=sTS[tN]||{name:tN,pts:0,gf:0,ga:0,gd:0, wins:0};s.gd=s.gf-s.ga;return s;}),
@@ -3439,6 +3446,15 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
 
             const totalDrawsLine = findBalancedHalfPointLine(groupData.groupTotalDrawsSims || [], average(groupData.groupTotalDrawsSims || []));
             addLineRow('Ukupno neresenih', `u grupi ${groupKey}`, totalDrawsLine, groupData.groupTotalDrawsSims || []);
+
+            const threePlusLine = findBalancedHalfPointLine(groupData.groupThreePlusSims || [], average(groupData.groupThreePlusSims || []));
+            addLineRow('Broj meceva', '3+ golova', threePlusLine, groupData.groupThreePlusSims || []);
+
+            const zeroZeroLine = findBalancedHalfPointLine(groupData.groupZeroZeroSims || [], average(groupData.groupZeroZeroSims || []));
+            addLineRow('Broj meceva', '0:0', zeroZeroLine, groupData.groupZeroZeroSims || []);
+
+            const ggLine = findBalancedHalfPointLine(groupData.groupGGSims || [], average(groupData.groupGGSims || []));
+            addLineRow('Broj meceva', 'GG', ggLine, groupData.groupGGSims || []);
 
             const firstPtsSims = groupData.firstPlacePtsSims || [];
             if (firstPtsSims.length > 0) {
