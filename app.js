@@ -2433,82 +2433,88 @@ import { createSection, createTeamLambdaTable, createMatchLambdaTable } from './
 
             const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
             const rows = [];
-            const addYesNoRow = (market, probability) => {
-                const row = [date, time, '', market, '', calculateOddWithMargin(probability, marginDecimal), '', '', '', '', '', '', ''];
+            const addYesNoRow = (domacin, gost, probability) => {
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = domacin; row[4] = gost;
+                row[5] = calculateOddWithMargin(probability, marginDecimal);
                 rows.push(buildCsvRow(row));
             };
-            const addLineRow = (market, line, values) => {
+            const addLineRow = (domacin, gost, line, values) => {
                 const { overProb, underProb } = getLineProbabilities(values, line);
-                const row = [date, time, '', market, '', '', '', '', line.toFixed(1), calculateOddWithMargin(underProb, marginDecimal), calculateOddWithMargin(overProb, marginDecimal), '', ''];
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = domacin; row[4] = gost;
+                row[8] = line.toFixed(1);
+                row[9] = calculateOddWithMargin(underProb, marginDecimal);
+                row[10] = calculateOddWithMargin(overProb, marginDecimal);
                 rows.push(buildCsvRow(row));
             };
-            const addRangeYesNoRow = (market, values, predicate) => {
-                const probability = values.filter(predicate).length / currentNumSims;
-                addYesNoRow(market, probability);
+            const addRangeYesNoRow = (domacin, gost, values, predicate) => {
+                addYesNoRow(domacin, gost, values.filter(predicate).length / currentNumSims);
             };
 
             let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
             const matchNameRow = emptyRow();
-            matchNameRow[0] = 'MATCH_NAME:World Cup 2026';
+            matchNameRow[0] = 'MATCH_NAME: World Cup 2026';
             csvContent += buildCsvRow(matchNameRow);
             const leagueRow = emptyRow();
-            leagueRow[0] = `LEAGUE_NAME:${teamName}`;
+            leagueRow[0] = `LEAGUE_NAME: ${teamName}`;
             csvContent += buildCsvRow(leagueRow);
             csvContent += buildCsvRow(emptyRow());
 
-            addYesNoRow('Pobednik Grupe', (teamData.posCounts[0] || 0) / currentNumSims);
-            addYesNoRow('2. mesto u grupi', (teamData.posCounts[1] || 0) / currentNumSims);
-            addYesNoRow('3. mesto u grupi', (teamData.posCounts[2] || 0) / currentNumSims);
-            addYesNoRow('4. mesto u grupi', (teamData.posCounts[3] || 0) / currentNumSims);
-            addYesNoRow('prolazi grupu', (teamData.advanceToKnockoutCount || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/16 finala', (knockoutData.eliminateR32 || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/8 finala', (knockoutData.eliminateR16 || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/4 finala', (knockoutData.eliminateQF || 0) / currentNumSims);
-            addYesNoRow('eliminacija u 1/2 finala', (knockoutData.eliminateSF || 0) / currentNumSims);
-            addYesNoRow('eliminacija u finalu', (knockoutData.runnerUpCount || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/16 finala', (knockoutData.reachR32 || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/8 finala', (knockoutData.reachR16 || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/4 finala', (knockoutData.reachQF || 0) / currentNumSims);
-            addYesNoRow('dolazi do 1/2 finala', (knockoutData.reachSF || 0) / currentNumSims);
-            addYesNoRow('dolazi do finala', (knockoutData.reachFINAL || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Pobednik turnira', (knockoutData.winFINAL || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Pobednik Grupe', (teamData.posCounts[0] || 0) / currentNumSims);
+            addYesNoRow(teamName, '2. mesto u grupi', (teamData.posCounts[1] || 0) / currentNumSims);
+            addYesNoRow(teamName, '3. mesto u grupi', (teamData.posCounts[2] || 0) / currentNumSims);
+            addYesNoRow(teamName, '4. mesto u grupi', (teamData.posCounts[3] || 0) / currentNumSims);
+            addYesNoRow(teamName, 'prolazi grupu', (teamData.advanceToKnockoutCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'eliminacija u 1/16 finala', (knockoutData.eliminateR32 || 0) / currentNumSims);
+            addYesNoRow(teamName, 'eliminacija u 1/8 finala', (knockoutData.eliminateR16 || 0) / currentNumSims);
+            addYesNoRow(teamName, 'eliminacija u 1/4 finala', (knockoutData.eliminateQF || 0) / currentNumSims);
+            addYesNoRow(teamName, 'eliminacija u 1/2 finala', (knockoutData.eliminateSF || 0) / currentNumSims);
+            addYesNoRow(teamName, 'eliminacija u finalu', (knockoutData.runnerUpCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'dolazi do 1/16 finala', (knockoutData.reachR32 || 0) / currentNumSims);
+            addYesNoRow(teamName, 'dolazi do 1/8 finala', (knockoutData.reachR16 || 0) / currentNumSims);
+            addYesNoRow(teamName, 'dolazi do 1/4 finala', (knockoutData.reachQF || 0) / currentNumSims);
+            addYesNoRow(teamName, 'dolazi do 1/2 finala', (knockoutData.reachSF || 0) / currentNumSims);
+            addYesNoRow(teamName, 'dolazi do finala', (knockoutData.reachFINAL || 0) / currentNumSims);
 
             [0, 1, 2, 3, 4, 5, 6, 7, 9].forEach(points => {
-                addRangeYesNoRow(`${points} bodova u grupi`, teamData.ptsSims, value => value === points);
+                addRangeYesNoRow(teamName, `${points} bodova u grupi`, teamData.ptsSims, value => value === points);
             });
-            addRangeYesNoRow('1-3 boda u grupi', teamData.ptsSims, value => value >= 1 && value <= 3);
-            addRangeYesNoRow('2-4 boda u grupi', teamData.ptsSims, value => value >= 2 && value <= 4);
-            addRangeYesNoRow('4-6 bodova u grupi', teamData.ptsSims, value => value >= 4 && value <= 6);
-            addRangeYesNoRow('7+ bodova u grupi', teamData.ptsSims, value => value >= 7);
+            addRangeYesNoRow(teamName, '1-3 boda u grupi', teamData.ptsSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow(teamName, '2-4 boda u grupi', teamData.ptsSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow(teamName, '4-6 bodova u grupi', teamData.ptsSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow(teamName, '7+ bodova u grupi', teamData.ptsSims, value => value >= 7);
 
             buildDynamicHalfPointLines(teamData.ptsSims, xPtsReference).forEach((line, idx) => {
-                addLineRow(`osvojenih bodova u grupi${idx + 1}`, line, teamData.ptsSims);
+                addLineRow(teamName, `osvojenih bodova u grupi${idx + 1}`, line, teamData.ptsSims);
             });
             buildDynamicHalfPointLines(teamData.gfSims, xGFReference).forEach((line, idx) => {
-                addLineRow(`datih golova u grupi${idx + 1}`, line, teamData.gfSims);
+                addLineRow(teamName, `datih golova u grupi${idx + 1}`, line, teamData.gfSims);
             });
 
-            addRangeYesNoRow('1-2 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 2);
-            addRangeYesNoRow('1-3 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 3);
-            addRangeYesNoRow('2-4 datih golova u grupi', teamData.gfSims, value => value >= 2 && value <= 4);
-            addRangeYesNoRow('4-6 datih golova u grupi', teamData.gfSims, value => value >= 4 && value <= 6);
-            addRangeYesNoRow('5-7 datih golova u grupi', teamData.gfSims, value => value >= 5 && value <= 7);
+            addRangeYesNoRow(teamName, '1-2 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 2);
+            addRangeYesNoRow(teamName, '1-3 datih golova u grupi', teamData.gfSims, value => value >= 1 && value <= 3);
+            addRangeYesNoRow(teamName, '2-4 datih golova u grupi', teamData.gfSims, value => value >= 2 && value <= 4);
+            addRangeYesNoRow(teamName, '4-6 datih golova u grupi', teamData.gfSims, value => value >= 4 && value <= 6);
+            addRangeYesNoRow(teamName, '5-7 datih golova u grupi', teamData.gfSims, value => value >= 5 && value <= 7);
 
             buildDynamicHalfPointLines(teamData.gaSims, xGAReference).forEach((line, idx) => {
-                addLineRow(`primljenih golova u grupi${idx + 1}`, line, teamData.gaSims);
+                addLineRow(teamName, `primljenih golova u grupi${idx + 1}`, line, teamData.gaSims);
             });
 
-            addYesNoRow('Najvise datih golova na turniru', (knockoutData.mostTournamentGFCount || 0) / currentNumSims);
-            addYesNoRow('Najvise primljenih golova na turniru', (knockoutData.mostTournamentGACount || 0) / currentNumSims);
-            addYesNoRow('Daje gol na svakoj utakmici u grupi', (teamData.scoreEveryGroupGameCount || 0) / currentNumSims);
-            addYesNoRow('Bez poraza u grupi', (teamData.noLossGroupCount || 0) / currentNumSims);
-            addYesNoRow('Prima gol u svakoj utakmici u grupi', (teamData.concedeEveryGroupGameCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Najvise datih golova na turniru', (knockoutData.mostTournamentGFCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Najvise primljenih golova na turniru', (knockoutData.mostTournamentGACount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Daje gol na svakoj utakmici u grupi', (teamData.scoreEveryGroupGameCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Bez poraza u grupi', (teamData.noLossGroupCount || 0) / currentNumSims);
+            addYesNoRow(teamName, 'Prima gol u svakoj utakmici u grupi', (teamData.concedeEveryGroupGameCount || 0) / currentNumSims);
 
             const winLine = findBalancedHalfPointLine(teamData.winsSims, average(teamData.winsSims));
-            addLineRow('broj pobeda u grupi', winLine, teamData.winsSims);
+            addLineRow(teamName, 'broj pobeda u grupi', winLine, teamData.winsSims);
             const drawLine = findBalancedHalfPointLine(teamData.drawsSims, average(teamData.drawsSims));
-            addLineRow('broj neresenih u grupi', drawLine, teamData.drawsSims);
+            addLineRow(teamName, 'broj neresenih u grupi', drawLine, teamData.drawsSims);
             const tournamentGoalsLine = findBalancedHalfPointLine(knockoutData.tournamentGfSims || [], average(knockoutData.tournamentGfSims || []));
-            addLineRow('broj datih golova na turniru', tournamentGoalsLine, knockoutData.tournamentGfSims || []);
+            addLineRow(teamName, 'broj datih golova na turniru', tournamentGoalsLine, knockoutData.tournamentGfSims || []);
 
             csvContent += rows.join('');
 
@@ -3172,67 +3178,72 @@ FINAL,Match 104,Winner Match 101,vs,Winner Match 102`;
 
             const emptyRow = () => ['', '', '', '', '', '', '', '', '', '', '', '', ''];
             const rows = [];
-            const addYesNoRow = (market, probability) => {
-                const row = [date, time, '', market, '', calculateOddWithMargin(probability, marginDecimal), '', '', '', '', '', '', ''];
+            const addYesNoRow = (domacin, gost, probability) => {
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = domacin; row[4] = gost;
+                row[5] = calculateOddWithMargin(probability, marginDecimal);
                 rows.push(buildCsvRow(row));
             };
-            const addLineRow = (market, line, values) => {
+            const addLineRow = (domacin, gost, line, values) => {
                 const { overProb, underProb } = getLineProbabilities(values, line);
-                const row = [date, time, '', market, '', '', '', '', line.toFixed(1), calculateOddWithMargin(underProb, marginDecimal), calculateOddWithMargin(overProb, marginDecimal), '', ''];
+                const row = emptyRow();
+                row[0] = date; row[1] = time; row[3] = domacin; row[4] = gost;
+                row[8] = line.toFixed(1);
+                row[9] = calculateOddWithMargin(underProb, marginDecimal);
+                row[10] = calculateOddWithMargin(overProb, marginDecimal);
                 rows.push(buildCsvRow(row));
             };
 
             let csvContent = buildCsvRow(['Datum', 'Vreme', 'Sifra', 'Domacin', 'Gost', '1', 'X', '2', 'GR', 'U', 'O', 'Yes', 'No']);
             const matchNameRow = emptyRow();
-            matchNameRow[0] = 'MATCH_NAME:World Cup 2026';
+            matchNameRow[0] = 'MATCH_NAME: World Cup 2026';
             csvContent += buildCsvRow(matchNameRow);
             const leagueRow = emptyRow();
-            leagueRow[0] = `LEAGUE_NAME:Grupa ${groupKey}`;
+            leagueRow[0] = `LEAGUE_NAME: Grupa ${groupKey}`;
             csvContent += buildCsvRow(leagueRow);
             csvContent += buildCsvRow(emptyRow());
 
             teams.forEach(team => {
                 const prob = (groupData[team]?.posCounts?.[0] || 0) / currentNumSims;
-                addYesNoRow(`${team} - pobednik grupe`, prob);
+                addYesNoRow(team, 'Pobednik grupe', prob);
             });
 
             const allSF = Object.entries(groupData.straightForecasts || {}).sort(([, a], [, b]) => b - a);
             allSF.forEach(([key, count]) => {
-                const marketName = key.replace('(1st)-', '/').replace('(2nd)', '');
-                addYesNoRow(`Tacan redosled 1-2: ${marketName}`, count / currentNumSims);
+                const teamPair = key.replace('(1st)-', '/').replace('(2nd)', '').trim();
+                addYesNoRow(teamPair, 'Tacan poredak', count / currentNumSims);
             });
 
             const allAD = Object.entries(groupData.advancingDoubles || {}).sort(([, a], [, b]) => b - a);
             allAD.forEach(([key, count]) => {
-                addYesNoRow(`Prva dva bilo kojim redom: ${key.replace('&', ' / ')}`, count / currentNumSims);
+                addYesNoRow(key.replace('&', '/').trim(), 'Prva dva u grupi', count / currentNumSims);
             });
 
-            addYesNoRow('Bilo koji tim osvaja 9 bodova', (groupData.anyTeam9PtsCount || 0) / currentNumSims);
-            addYesNoRow('Bilo koji tim osvaja 0 bodova', (groupData.anyTeam0PtsCount || 0) / currentNumSims);
-            addYesNoRow('Treceplasirani tim ide dalje', (groupData.thirdPlaceAdvancesCount || 0) / currentNumSims);
+            addYesNoRow('Bilo koji tim', '9 bodova', (groupData.anyTeam9PtsCount || 0) / currentNumSims);
+            addYesNoRow('Bilo koji tim', '0 bodova', (groupData.anyTeam0PtsCount || 0) / currentNumSims);
+            addYesNoRow('Trece mesto', 'ide dalje', (groupData.thirdPlaceAdvancesCount || 0) / currentNumSims);
 
             const totalGoalsLines = buildDynamicHalfPointLines(groupData.groupTotalGoalsSims || [], average(groupData.groupTotalGoalsSims || []));
-            ['ukupno golova u grupi (balans)', 'ukupno golova u grupi (+1)', 'ukupno golova u grupi (-1)'].forEach((label, idx) => {
-                const line = totalGoalsLines[idx];
-                addLineRow(label, line, groupData.groupTotalGoalsSims || []);
+            totalGoalsLines.forEach(line => {
+                addLineRow('Ukupno golova', `u grupi ${groupKey}`, line, groupData.groupTotalGoalsSims || []);
             });
 
             const totalDrawsLine = findBalancedHalfPointLine(groupData.groupTotalDrawsSims || [], average(groupData.groupTotalDrawsSims || []));
-            addLineRow('ukupno neresenih meceva u grupi', totalDrawsLine, groupData.groupTotalDrawsSims || []);
+            addLineRow('Ukupno neresenih', `u grupi ${groupKey}`, totalDrawsLine, groupData.groupTotalDrawsSims || []);
 
             const firstPtsSims = groupData.firstPlacePtsSims || [];
             if (firstPtsSims.length > 0) {
-                [4.5, 6.5, 7.5].forEach(line => addLineRow(`broj bodova prvoplasiranog tima${line === 4.5 ? '1' : line === 6.5 ? '2' : '3'}`, line, firstPtsSims));
+                [4.5, 6.5, 7.5].forEach(line => addLineRow('Uk. bodova', 'Prvoplasirani tim', line, firstPtsSims));
             }
 
             const fourthPtsSims = groupData.fourthPlacePtsSims || [];
             if (fourthPtsSims.length > 0) {
-                [0.5, 1.5, 2.5].forEach(line => addLineRow(`broj bodova poslednjeplasiranog tima${line === 0.5 ? '1' : line === 1.5 ? '2' : '3'}`, line, fourthPtsSims));
+                [0.5, 1.5, 2.5].forEach(line => addLineRow('Uk. bodova', 'Poslednjeplasiran tim', line, fourthPtsSims));
             }
 
             teams.forEach(team => {
                 const probMostGoals = (groupData[team]?.mostGFCount || 0) / currentNumSims;
-                addYesNoRow(`${team} - najefikasniji tim u grupi`, probMostGoals);
+                addYesNoRow(team, 'Najefikasniji tim u grupi', probMostGoals);
             });
 
             csvContent += rows.join('');
